@@ -18,7 +18,7 @@ extras_require = {
 setup(
     name='blocks',
     version='0.4.1',
-    description='RMerge dataframe blocks distributed on disk.',
+    description='Merge dataframe blocks distributed on disk.',
     long_description=readme,
     author='Bradley Axen',
     author_email='baxen@squareup.com',
