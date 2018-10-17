@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import tempfile
-import shutil
-import atexit
 import numpy as np
 import pandas as pd
 import warnings
@@ -40,7 +37,7 @@ def assemble(path, cgroups=None, rgroups=None,
     merge : one of 'left', 'right', 'outer', 'inner', default 'inner'
         The merge strategy to pass to pandas.merge
     filesystem : blocks.filesystem.FileSystem or similar
-        A filesystem object that implements ls and copy
+        A filesystem object that implements the blocks.FileSystem API
 
     Returns
     -------
@@ -56,16 +53,16 @@ def assemble(path, cgroups=None, rgroups=None,
     frames = []
 
     for group in grouped:
-        paths = grouped[group]
+        datafiles = grouped[group]
         args = read_args.copy()
         if group in cgroup_args:
             args.update(cgroup_args[group])
-        frames.append(pd.concat(read_df(p, **args) for p in paths))
+        frames.append(pd.concat(read_df(d, **args) for d in datafiles))
 
     # ----------------------------------------
     # Merge all cgroups
     # ----------------------------------------
-    return _merge_all(frames)
+    return _merge_all(frames, merge=merge)
 
 
 def iterate(path, axis=-1, cgroups=None, rgroups=None,
@@ -86,7 +83,7 @@ def iterate(path, axis=-1, cgroups=None, rgroups=None,
         The axis to iterate along
         If -1 (the default), iterate over both columns and rows
         If 0, iterate over the rgroups, combining any cgroups
-        If 1, iterate over the cgroups, cobining any rgroups
+        If 1, iterate over the cgroups, combining any rgroups
     cgroups : list of str, or {str: args} optional
         The list of cgroups (folder names) to include from the glob path
     rgroups : list of str, optional
@@ -99,7 +96,7 @@ def iterate(path, axis=-1, cgroups=None, rgroups=None,
     merge : one of 'left', 'right', 'outer', 'inner', default 'inner'
         The merge strategy to pass to pandas.merge, only used when axis=0
     filesystem : blocks.filesystem.FileSystem or similar
-        A filesystem object that implements ls and copy
+        A filesystem object that implements the blocks.FileSystem API
 
     Returns
     -------
@@ -116,33 +113,34 @@ def iterate(path, axis=-1, cgroups=None, rgroups=None,
             args = read_args.copy()
             if cgroup in cgroup_args:
                 args.update(cgroup_args[cgroup])
-            for path in grouped[cgroup]:
-                yield _cname(path), _rname(path), read_df(path, **args)
+            for datafile in grouped[cgroup]:
+                yield _cname(datafile.path), _rname(datafile.path), read_df(datafile, **args)
 
     elif axis == 0:
         # find the shared files among all subfolders
-        rgroups = reduce(
-            lambda a, b: set(a) & set(b),
-            [map(_rname, p) for p in grouped.values()]
-        )
+        rgroups = _shared_rgroups(grouped)
 
         for rgroup in sorted(rgroups):
             frames = []
             for cgroup in grouped:
-                path = os.path.join(os.path.dirname(grouped[cgroup][0]), rgroup)
+                datafile = next(
+                    d for d in grouped[cgroup]
+                    if os.path.basename(d.path) == rgroup
+                )
+
                 args = read_args.copy()
                 if cgroup in cgroup_args:
                     args.update(cgroup_args[cgroup])
-                frames.append(read_df(path, **args))
-            yield rgroup, _merge_all(frames)
+                frames.append(read_df(datafile, **args))
+            yield rgroup, _merge_all(frames, merge=merge)
 
     elif axis == 1:
         for cgroup in grouped:
-            paths = grouped[cgroup]
+            datafiles = grouped[cgroup]
             args = read_args.copy()
             if cgroup in cgroup_args:
                 args.update(cgroup_args[cgroup])
-            yield cgroup, pd.concat(read_df(p, **args) for p in paths)
+            yield cgroup, pd.concat(read_df(d, **args) for d in datafiles)
 
     else:
         raise ValueError('Invalid choice for axis, options are -1, 0, 1')
@@ -173,7 +171,7 @@ def partitioned(path, cgroups=None, rgroups=None,
     merge : one of 'left', 'right', 'outer', 'inner', default 'inner'
         The merge strategy to pass to pandas.merge, only used when axis=0
     filesystem : blocks.filesystem.FileSystem or similar
-        A filesystem object that implements ls and copy
+        A filesystem object that implements the blocks.FileSystem API
 
     Returns
     -------
@@ -191,19 +189,21 @@ def partitioned(path, cgroups=None, rgroups=None,
     blocks = []
 
     @dask.delayed()
-    def merged(base, rgroup):
+    def merged(rgroup):
         frames = []
         for cgroup in grouped:
+            datafile = next(
+                d for d in grouped[cgroup]
+                if os.path.basename(d.path) == rgroup
+            )
             args = read_args.copy()
             if cgroup in cgroup_args:
                 args.update(cgroup_args[cgroup])
-            frames.append(read_df(os.path.join(base, cgroup, rgroup), **args))
-        return _merge_all(frames)
+            frames.append(read_df(datafile,  **args))
+        return _merge_all(frames, merge=merge)
 
-    for path in grouped.values().pop():
-        base = _base(path)
-        rgroup = _rname(path)
-        blocks.append(merged(base, rgroup))
+    for rgroup in _shared_rgroups(grouped):
+        blocks.append(merged(rgroup))
     return dd.from_delayed(blocks)
 
 
@@ -219,16 +219,12 @@ def place(df, path, filesystem=GCSFileSystem(), **write_args):
     write_args : dict
         Any additional args to pass to the write function
     filesystem : blocks.filesystem.FileSystem or similar
-        A filesystem object that implements ls and copy
+        A filesystem object that implements the blocks.FileSystem API
 
     """
-    suffix = os.path.splitext(path)[-1]
-    if not filesystem.local(path):
-        with tempfile.NamedTemporaryFile(suffix=suffix) as f:
-            write_df(df, f.name, **write_args)
-            filesystem.copy([f.name], path)
-    else:
-        write_df(df, path, **write_args)
+    bucket, fname = os.path.dirname(path), os.path.basename(path)
+    with filesystem.store(bucket, [fname]) as datafiles:
+        write_df(df, datafiles[0], **write_args)
 
 
 def divide(
@@ -268,27 +264,11 @@ def divide(
         If true attempt to coerce types to numeric. This can avoid issues with amiguous
         object columns but requires additional time
     filesystem : blocks.filesystem.FileSystem or similar
-        A filesystem object that implements ls and copy
+        A filesystem object that implements the blocks.FileSystem API
     write_args : dict
         Any additional args to pass to the write function
 
     """
-    if not filesystem.local(path):
-        tmpdir = _session_tempdir('tmp')
-        divide(
-            df,
-            tmpdir,
-            n_rgroup=n_rgroup,
-            rgroup_offset=rgroup_offset,
-            cgroup_columns=cgroup_columns,
-            extension=extension,
-            **write_args
-        )
-        # ensure that the path specifies to copy into a directory
-        path = os.path.join(path, '')
-        filesystem.copy([os.path.join(tmpdir, '*')], path)
-        return
-
     # Use a single dummy cgroup if None wanted
     if cgroup_columns is None:
         cgroup_columns = {None: df.columns}
@@ -303,21 +283,12 @@ def divide(
 
     for cname, columns in cgroup_columns.iteritems():
         cgroup = df[columns]
-        for i, rgroup in enumerate(np.array_split(cgroup, n_rgroup)):
-            rname = 'part_{:05d}{}'.format(i+rgroup_offset, extension)
-            if cname is None:
-                rpath = os.path.join(path, rname)
-            else:
-                rpath = os.path.join(path, cname, rname)
-            if not os.path.exists(os.path.dirname(rpath)):
-                os.makedirs(os.path.dirname(rpath))
-            write_df(rgroup.reset_index(drop=True), rpath, **write_args)
 
-
-def clear_cache():
-    """ Remove all cached downloads
-    """
-    _collect.cache = {}
+        bucket = os.path.join(path, cname) if cname else path
+        rnames = ['part_{:05d}{}'.format(i+rgroup_offset, extension) for i in xrange(n_rgroup)]
+        with filesystem.store(bucket, rnames) as datafiles:
+            for rgroup, d in zip(np.array_split(cgroup, n_rgroup), datafiles):
+                write_df(rgroup.reset_index(drop=True), d, **write_args)
 
 
 def _collect(path, cgroups, rgroups, filesystem):
@@ -334,7 +305,7 @@ def _collect(path, cgroups, rgroups, filesystem):
     rgroups : list of str, optional
         The list of rgroups (file names) to include from the glob path
     filesystem : blocks.filesystem.FileSystem or similar
-        A file system class that implements a glob function
+        A filesystem object that implements the blocks.FileSystem API
 
     Returns
     -------
@@ -346,6 +317,8 @@ def _collect(path, cgroups, rgroups, filesystem):
     # Collect paths into cgroups
     # ----------------------------------------
     paths = filesystem.ls(path)
+    if not paths:
+        raise ValueError('Did not find any files at the path: {}'.format(path))
     expanded = _expand(paths, filesystem)
     filtered = _filter(expanded, cgroups, rgroups)
     grouped = _cgroups(filtered)
@@ -415,36 +388,12 @@ def _cgroups(paths):
     return cgroups
 
 
-def _session_tempdir(subdir):
-    """ Create a tempdir that will be cleaned up at session exit
-    """
-    tmpdir = tempfile.mkdtemp()
-    # create and use a subdir of specified name to preserve cgroup logic
-    path = os.path.join(tmpdir, subdir)
-    os.makedirs(path)
-    atexit.register(lambda: shutil.rmtree(tmpdir))
-    return path
-
-
 def _access(cgroups, filesystem):
     """ Access potentially cloud stored files, preserving cgroups
-
-    This uses the filesystem to copy the files locally and cleans
-    them up at program exit.
     """
-    # TODO possibly handle the multiprocessing myself to let it
-    # parallelize the download across cols as well as rows
     updated = {}
     for cgroup, paths in cgroups.iteritems():
-        # if the files are already all local we can continue
-        if all(filesystem.local(p) for p in paths):
-            updated[cgroup] = paths
-            continue
-
-        # otherwise we copy into a local tempdir
-        tmpdir = _session_tempdir(cgroup)
-        filesystem.copy(paths, tmpdir)
-        updated[cgroup] = [os.path.join(tmpdir, os.path.basename(p)) for p in paths]
+        updated[cgroup] = filesystem.access(paths)
     return updated
 
 
@@ -464,3 +413,11 @@ def _merge_all(frames, merge='inner'):
     for frame in frames[1:]:
         result = _safe_merge(result, frame, merge)
     return result
+
+
+def _shared_rgroups(grouped):
+    rgroups = [
+        [_rname(d.path) for d in group]
+        for group in grouped.values()
+    ]
+    return reduce(lambda a, b: set(a) & set(b), rgroups)
