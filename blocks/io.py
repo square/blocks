@@ -9,17 +9,23 @@ try:
 except ImportError:
     parquet = False
 
+try:
+    import fastavro as avro
+    avro_imported = True
+except ImportError:
+    avro_imported = False
 
-def read_df(path, **read_args):
+
+def read_df(datafile, **read_args):
     """ Read a dataframe from file based on the file extension
 
     The following formats are supported:
-    parquet, csv, hdf5, pickle
+    parquet, avro, csv, pickle
 
     Parameters
     ----------
-    path : str
-        Path to the file
+    datafile : DataFile
+        DataFile instance with the path and handle
     read_args : optional
         All keyword args are passed to the read function
 
@@ -33,21 +39,22 @@ def read_df(path, **read_args):
     Check the pandas doc for more information on the supported arguments
 
     """
-    return _readers[_get_extension(path)](path, **read_args)
+    datafile.handle.seek(0)  # ensure we start from the beginning of the file
+    return _readers[_get_extension(datafile.path)](datafile.handle, **read_args)
 
 
-def write_df(df, path, **write_args):
+def write_df(df, datafile, **write_args):
     """ Write a dataframe to file based on the file extension
 
     The following formats are supported:
-    parquet, csv, hdf5, pickle
+    parquet, avro, csv, pickle
 
     Parameters
     ----------
     df : pd.DataFrame
         The dataframe to write to disk
-    path : str
-        Path to the file
+    datafile : DataFile
+        Datafile instance with the path and file handle
     write_args : optional
         All keyword args are passed to the write function
 
@@ -57,7 +64,7 @@ def write_df(df, path, **write_args):
     Check the pandas doc for more information on the supported arguments
 
     """
-    write_name = _writers[_get_extension(path)]
+    write_name = _writers[_get_extension(datafile.path)]
 
     if write_name == 'to_parquet' and not pd.Series(df.columns).map(type).eq(str).all():
         warnings.warn(
@@ -65,18 +72,16 @@ def write_df(df, path, **write_args):
             'Blocks will attempt to convert them to strings.'
         )
         df.columns = df.columns.astype('str')
-
+    if write_name == 'to_avro':
+        return _write_avro(df, datafile.handle, **write_args)
     write_fn = getattr(df, write_name)
-    if write_name == 'to_hdf':
-        # hdf requires a 'key' argument
-        return write_fn(path, 'data', **write_args)
-    elif write_name == 'to_csv':
+    if write_name == 'to_csv':
         # make index=False the default for similar behaviour to other formats
         csvargs = {'index': False}
         csvargs.update(write_args)
-        return write_fn(path, **csvargs)
+        return write_fn(datafile.handle, **csvargs)
     else:
-        return write_fn(path, **write_args)
+        return write_fn(datafile.handle, **write_args)
 
 
 def _read_parquet(path, **read_args):
@@ -100,6 +105,36 @@ def _read_parquet(path, **read_args):
     return pq.read_table(path, **read_args).to_pandas()
 
 
+def _read_avro(handle, **read_args):
+    if not avro_imported:
+        raise ImportError('Avro support requires fastavro.\n'
+                          'Install blocks with the [avro] option or `pip install fastavro`')
+    records = []
+    avro_reader = avro.reader(handle)
+    for record in avro_reader:
+        records.append(record)
+    return pd.DataFrame.from_dict(records)
+
+
+def _write_avro(df, handle, **write_args):
+    if not avro_imported:
+        raise ImportError('Avro support requires fastavro.\n'
+                          'Install blocks with the [avro] option or `pip install fastavro`')
+    schema = None
+    schema_path = None
+    try:
+        schema = write_args['schema']
+    except KeyError:
+        try:
+            schema_path = write_args['schema_path']
+        except KeyError:
+            raise Exception("You must provide a schema or schema path when writing to Avro")
+    if schema is None:
+        schema = avro.schema.load_schema(schema_path)
+    records = df.to_dict('records')
+    avro.writer(handle, schema, records)
+
+
 def _get_extension(path):
     name, ext = os.path.splitext(path)
     # Support compression extensions, eg part.csv.gz
@@ -111,22 +146,18 @@ def _get_extension(path):
 _readers = {
     '.pq': _read_parquet,
     '.parquet': _read_parquet,
-    '.h5': pd.read_hdf,
-    '.hdf': pd.read_hdf,
-    '.hdf5': pd.read_hdf,
     '.csv': pd.read_csv,
     '.pkl': pd.read_pickle,
+    '.avro': _read_avro,
 }
 
 
 _writers = {
     '.pq': 'to_parquet',
     '.parquet': 'to_parquet',
-    '.h5': 'to_hdf',
-    '.hdf': 'to_hdf',
-    '.hdf5': 'to_hdf',
     '.csv': 'to_csv',
     '.pkl': 'to_pickle',
+    '.avro': 'to_avro',
 }
 
 _compressions = [

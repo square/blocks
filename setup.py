@@ -12,12 +12,13 @@ requirements = [
 
 extras_require = {
     'pq': ['pyarrow'],
+    'avro': ['fastavro'],
     'dev': ['pytest', 'pytest-cov', 'flake8', 'sphinx', 'numpydoc', 'sphinx-rtd-theme'],
 }
 
 setup(
     name='blocks',
-    version='0.4.1',
+    version='0.4.3',
     description='Merge dataframe blocks distributed on disk.',
     long_description=readme,
     author='Bradley Axen',
