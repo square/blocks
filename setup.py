@@ -17,7 +17,7 @@ extras_require = {
 }
 
 setup(
-    name='blocks',
+    name='sq-blocks',
     version='0.4.3',
     description='Merge dataframe blocks distributed on disk.',
     long_description=readme,
