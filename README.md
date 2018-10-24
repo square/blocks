@@ -2,7 +2,7 @@
 
 Merge dataframe blocks distributed on disk.
 
-    pip install blocks
+    pip install sq-blocks
 
 ![blocks](docs/blocks.gif)
 
