@@ -19,8 +19,12 @@ extras_require = {
 setup(
     name='sq-blocks',
     version='0.4.3',
-    description='Merge dataframe blocks distributed on disk.',
+    description=(
+        'Blocks provides a simple interface to read, organize, and manipulate structured data'
+        ' in files on local and cloud storage'
+    ),
     long_description=readme,
+    long_description_content_type="text/markdown",
     author='Bradley Axen',
     author_email='baxen@squareup.com',
     packages=find_packages(),

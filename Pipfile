@@ -1,17 +1,12 @@
 [[source]]
-url = "https://pypi.python.org/simple"
+url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
 [dev-packages]
-pyarrow = "*"
-tables = "*"
-sphinx-autobuild = "*"
 
 [packages]
-"e1839a8" = {path = ".", extras = ["dev"], editable = true}
-pandas = "==0.20.1" # there is currently a bug installing later versions of Pandas. This is temporary until that is fixed.
-"delegator.py" = "*"
+sq-blocks = {path = ".", extras = ["dev"], editable = true}
 
 [requires]
 python_version = "2.7"

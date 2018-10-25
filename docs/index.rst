@@ -4,26 +4,42 @@ Blocks
 
 .. image:: blocks.gif
 
-*blocks* provides a simple interface to read, organize, and manipulate structured data on disk
+Blocks provides a simple interface to read, organize, and manipulate structured data in files
+on local and cloud storage
+
+Install
+-------------
+.. code-block:: bash
+
+    pip install sq-blocks
+
+To enable GCS support make sure to also install the `Google Cloud SDK`_
+
+Features
+--------
 
 .. code-block:: python
 
     import blocks
 
-    df = blocks.assemble('data/*.csv')
+    # Load one or more files with the same interface
+    df = blocks.assemble('data.csv')
     train = blocks.assemble('data/*[01].csv')
     test = blocks.assemble('data/*[2-9].csv')
 
+    # With direct support for files on GCS
+    df = blocks.assemble('gs://mybucket/data.csv')
+    df = blocks.assemble('gs://mybucket/data/*.csv')
 
 The interface emulates the tools you're used to from the command line, with full support for globbing and pattern
-matching. And *blocks* can handle more complicated structures as your data grows in complexity:
+matching. And blocks can handle more complicated structures as your data grows in complexity:
 
 =======================  =====================================================================
 Layout                   Recipe
 =======================  =====================================================================
 .. image:: both.png      .. code-block:: python
 
-                             blocks.assemble('data/')``
+                             blocks.assemble('data/**')``
 
 .. image:: column.png    .. code-block:: python
 
@@ -35,11 +51,10 @@ Layout                   Recipe
 
 .. image:: filtered.png  .. code-block:: python
 
-                             blocks.assemble('data/*/part_01.pq', cgroups=['g0', 'g1', 'g3'])
+                             blocks.assemble('data/g[124]/part_01.pq')
 
 =======================  =====================================================================
 
-Blocks supports data on your local computer but also data stored on GCS, assuming you have already setup the `Google Cloud SDK`_
 
 
 Full Contents
