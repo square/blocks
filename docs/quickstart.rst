@@ -5,8 +5,20 @@ Quickstart
 Layout
 ------
 
-Blocks makes a few assumptions about your data. You've split it up into blocks, either into groups of columns (cgroups) or groups
-of rows (rgroups). You can read all this data into a single dataframe in memory with one command:
+In the simplest case, you might want to read your data from a single file. This is pretty easy in
+pandas, but blocks adds additional support for inferring file types and support cloud storage:
+
+.. code-block:: python
+
+    import pandas as pd
+    import blocks
+    df = blocks.assemble('data.pkl') # same as pd.read_pickle
+    df = blocks.assemble('gs://mybucket/data.parquet')
+
+Many projects need to combine data stored in  several files. To support this, blocks makes a few
+assumptions about your data. You've split it up into blocks, either into groups of columns (cgroups)
+or groups of rows (rgroups). You can read all this data into a single dataframe in memory with one
+command:
 
 .. code-block:: python
 
@@ -190,9 +202,10 @@ If you want to put a dataframe into a single file, use ``place``:
     import blocks
 
     blocks.place(df, 'data/part_00.pq')
+    blocks.place(df, 'gs://mybucket/data/part_00.pq')
 
-Although this is pretty easy with ``pandas``, ``blocks`` provides some additional functionality; it infers
-the filetype from the path suffix and can place the dataframe onto GCS.
+Like with ``assemble`` for a single file, this is easy in ``pandas``, but ``blocks`` infers the file
+type and has support for cloud storage.
 
 Divide
 ======

@@ -1,6 +1,8 @@
 # Blocks
 
-Merge dataframe blocks distributed on disk.
+Blocks provides a simple interface to read, organize, and manipulate structured data in files
+on local and cloud storage. See the [documentation](https://sq-blocks.readthedocs.io) for more 
+information.
 
     pip install sq-blocks
 

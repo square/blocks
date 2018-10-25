@@ -56,7 +56,7 @@ or maybe you want to parallelize the process
     uniques = reduce(lambda a, b: a | b, uniques_per_block)
 
 
-Of course if you have dask installed this is even easier
+And if you have dask installed the parallelization is even easier
 
 .. code-block:: python
 
@@ -124,13 +124,10 @@ you can create a custom filesystem instance:
     import blocks
     from blocks.filesystem import GCSFileSystem
 
-    # disable parallel file copies
-    # this is usually slower but can save some memory use
-    fs = GCSFileSystem(parallel=False)
-
+    fs = GCSFileSystem()
     df = blocks.assemble('gs://bucket/data/', filesystem=fs)
 
 
-The default filesystem has a few options (in the API docs), but more importantly you can implement your own FileSystem
-class by inheriting from ``blocks.filesystem.FileSystem``. This can be used to extend blocks to additional cloud platforms,
-to support encryption/decryption, etc...
+The default filesystem has support for GCS, and you can implement your own FileSystem class by
+inheriting from ``blocks.filesystem.FileSystem``. This can be used to extend blocks to additional
+cloud platforms, to support encryption/decryption, etc...
