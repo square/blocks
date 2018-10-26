@@ -18,7 +18,7 @@ extras_require = {
 
 setup(
     name='sq-blocks',
-    version='0.4.3',
+    version='0.4.4',
     description=(
         'Blocks provides a simple interface to read, organize, and manipulate structured data'
         ' in files on local and cloud storage'
