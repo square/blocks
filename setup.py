@@ -13,8 +13,10 @@ requirements = [
 extras_require = {
     'pq': ['pyarrow'],
     'avro': ['fastavro'],
-    'dev': ['pytest', 'pytest-cov', 'flake8', 'sphinx', 'numpydoc', 'sphinx-rtd-theme'],
+    'tests': ['pytest', 'pytest-cov', 'delegator.py', 'flake8'],
+    'doc': ['sphinx', 'numpydoc', 'sphinx-rtd-theme']
 }
+extras_require['dev'] = set(sum(extras_require.values(), []))
 
 setup(
     name='sq-blocks',
