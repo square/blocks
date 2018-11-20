@@ -49,7 +49,7 @@ def test_access(populated, fs):
     cgroups = core._cgroups(expanded)
     cgroups = core._access(cgroups, fs)
     assert(len(cgroups) == 4)
-    for c, paths in cgroups.iteritems():
-        assert(len(paths) == 4)
-        for p in paths:
-            assert(os.path.exists(p))
+    for c, datafiles in cgroups.iteritems():
+        assert(len(datafiles) == 4)
+        for d in datafiles:
+            assert(d.handle.read())
