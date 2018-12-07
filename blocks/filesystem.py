@@ -7,8 +7,10 @@ import atexit
 import shutil
 
 from abc import ABCMeta, abstractmethod
+from cStringIO import StringIO
 from collections import namedtuple
 from contextlib import contextmanager
+from google.cloud import storage
 
 try:
     xrange
@@ -80,6 +82,10 @@ class FileSystem(object):
 
 class GCSFileSystem(FileSystem):
     """ File system interface that supports both local and GCS files
+
+    This implementation uses subprocess and gsutil, which has excellent performance.
+    However this can lead to problems in very multi-threaded applications and might not be
+    as portable. For a python native implementation use GCSNativeFileSystem
     """
     GCS = 'gs://'
 
@@ -106,7 +112,6 @@ class GCSFileSystem(FileSystem):
         """
         logging.info('Globbing file content in {}'.format(path))
         if not self.local(path):
-            # TODO perhaps use a python API rather than subprocess and gsutil
             with open(os.devnull, 'w') as DEVNULL:
                 p = subprocess.Popen(
                     ['gsutil', 'ls', path],
@@ -223,6 +228,84 @@ class GCSFileSystem(FileSystem):
             os.makedirs(bucket)
 
         self.copy(local_files, os.path.join(bucket, ''))
+
+
+class GCSNativeFileSystem(GCSFileSystem):
+    """ File system interface that supports GCS and local files
+
+    This uses the native python cloud storage library for read and write, rather than gsutil.
+    The performance is significantly slower when reading/writing several files but is thread-safe
+    for applications which are already parallelized. It also stores the files entirely in
+    memory rather than using tempfiles.
+    """
+    def __init__(self, *args, **kwargs):
+        self.client = storage.Client()
+        super(GCSNativeFileSystem, self).__init__(*args, **kwargs)
+
+    def access(self, paths):
+        datafiles = []
+        for path in paths:
+            datafiles.append(DataFile(path, StringIO()))
+        for datafile in datafiles:
+            self._read(datafile)
+        return datafiles
+
+    @contextmanager
+    def store(self, bucket, files):
+        """ Create file stores that will be written to the filesystem on close
+
+        This allows for optimizations when storing several files
+
+        Parameters
+        ----------
+        bucket : str
+            The path of the bucket (on GCS) or folder (local) to store the data in
+        files : list of str
+            The filenames to create
+
+        Returns
+        -------
+        datafiles : contextmanager
+            A context manager that yields datafiles and when the context is closed
+            they are written to GCS
+
+        Usage
+        -----
+        >>> with filesystem.store('gs://bucket/sub/', ['ex1.txt', 'ex2.txt']) as datafiles:
+        >>>     datafiles[0].handle.write('example 1')
+        >>>     datafiles[1].handle.write('example 2')
+        """
+        # Make StringIO instances that serve as the file handles
+        datafiles = []
+        for f in files:
+            datafiles.append(DataFile(os.path.join(bucket, f), StringIO()))
+
+        yield datafiles
+
+        for d in datafiles:
+            d.handle.seek(0)
+            self._write(d)
+
+    def _blob(self, path):
+        bucket = path.replace(self.GCS, '').split('/')[0]
+        prefix = "gs://{}".format(bucket)
+        path = path[len(prefix) + 1:]
+        return storage.Blob(path, self.client.get_bucket(bucket))
+
+    def _read(self, datafile):
+        if self.local(datafile.path):
+            with open(datafile.path, 'r') as f:
+                datafile.handle.write(f.read())
+        else:
+            self._blob(datafile.path).download_to_file(datafile.handle)
+        datafile.handle.seek(0)
+
+    def _write(self, datafile):
+        if self.local(datafile.path):
+            with open(datafile.path, 'w') as f:
+                f.write(datafile.handle.read())
+        else:
+            self._blob(datafile.path).upload_from_file(datafile.handle)
 
 
 def _session_tempdir():

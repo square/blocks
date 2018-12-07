@@ -8,6 +8,7 @@ with open('README.md') as readme_file:
 
 requirements = [
     'pandas',
+    'google-cloud-storage',
 ]
 
 extras_require = {
