@@ -3,7 +3,7 @@ import pytest
 import pandas as pd
 import numpy as np
 
-from blocks.filesystem import GCSFileSystem
+from blocks.filesystem import GCSFileSystem, GCSNativeFileSystem
 from delegator import run
 
 BUCKET = 'gs://blocks-example'
@@ -11,14 +11,27 @@ BUCKET = 'gs://blocks-example'
 if os.environ.get('ENVIRONMENT') == 'test':
     inputs = ['local']
     outputs = ['local']
+    filesystems = ['gcs']
 else:
     inputs = ['local', 'gcs', 'gcs_extra']
     outputs = ['local', 'gcs']
+    filesystems = ['gcs', 'native']
 
 
-@pytest.fixture(scope='session')
-def fs():
-    return GCSFileSystem()
+@pytest.fixture(scope='session', params=filesystems)
+def fs(request):
+    if request.param == 'gcs':
+        return GCSFileSystem()
+
+    if request.param == 'native':
+        return GCSNativeFileSystem()
+
+
+@pytest.fixture(scope='function')
+def gcstemp():
+    path = os.path.join(BUCKET, 'temp')
+    yield path
+    run('gsutil -m rm -r {}'.format(path))
 
 
 @pytest.fixture(scope='session')

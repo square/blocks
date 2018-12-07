@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 import os
 
+TEST_STRING = 'test'
+
 
 def test_ls_wildcard(populated, fs):
     ex = os.path.join(populated, '*/part.1.csv')
@@ -25,43 +27,13 @@ def test_ls_pattern(populated, fs):
     assert(fs.ls(ex) == expected)
 
 
-def test_copy_single(populated, fs, tmpdir):
-    local = str(tmpdir)
+def test_store_access(gcstemp, fs):
+    paths = []
+    with fs.store(gcstemp, ['ex1.txt', 'ex2.txt']) as datafiles:
+        for d in datafiles:
+            paths.append(d.path)
+            d.handle.write(TEST_STRING)
 
-    source = [os.path.join(populated, 'c0/part.1.csv')]
-    fs.copy(source, local)
-
-    expected = [os.path.join(local, 'part.1.csv')]
-    assert(fs.ls(os.path.join(local, '**')) == expected)
-
-
-def test_copy_multiple(populated, fs, tmpdir):
-    local = str(tmpdir)
-
-    source = [os.path.join(populated, 'c0/part.1.csv'), os.path.join(populated, 'c0/part.2.csv')]
-    fs.copy(source, local)
-
-    expected = [os.path.join(local, 'part.1.csv'), os.path.join(local, 'part.2.csv')]
-    assert(fs.ls(os.path.join(local, '**')) == expected)
-
-
-def test_copy_single_dir(populated, fs, tmpdir):
-    local = str(tmpdir)
-
-    source = [os.path.join(populated, 'c0')]
-    fs.copy(source, local)
-
-    expected = [os.path.join(local, 'c0/part.{}.csv'.format(i)) for i in xrange(4)]
-    assert(fs.ls(os.path.join(local, '**')) == expected)
-
-
-def test_copy_multiple_dir(populated, fs, tmpdir):
-    local = str(tmpdir)
-
-    source = [os.path.join(populated, 'c0'), os.path.join(populated, 'c1')]
-    fs.copy(source, local)
-
-    expected = [os.path.join(local, 'c{}/part.{}.csv'.format(i, j))
-                for i in xrange(2)
-                for j in xrange(4)]
-    assert(fs.ls(os.path.join(local, '**')) == expected)
+    datafiles = fs.access(paths)
+    for d in datafiles:
+        assert(d.handle.read() == TEST_STRING)
