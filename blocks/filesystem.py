@@ -1,3 +1,4 @@
+import fnmatch
 import os
 import glob
 import logging
@@ -131,7 +132,7 @@ class GCSFileSystem(FileSystem):
             output = [os.path.join(path, f) for f in os.listdir(path)]
         else:
             output = glob.glob(path)
-        return sorted(output)
+        return sorted(p.rstrip('/') for p in output)
 
     def copy(self, sources, dest):
         """ Copy the files in sources (recursively) to dest
@@ -242,7 +243,73 @@ class GCSNativeFileSystem(GCSFileSystem):
         self.client = storage.Client()
         super(GCSNativeFileSystem, self).__init__(*args, **kwargs)
 
+    def ls(self, path):
+        logging.info('Globbing file content in {}'.format(path))
+
+        # use GCSFileSystem's implementation for local paths
+        if self.local(path):
+            return super(GCSNativeFileSystem, self).ls(path)
+
+        # find all names that start with the prefix for this path
+        bucket, path = self._split(path)
+        prefix = self._prefix(path)
+        names = [b.name for b in self.client.get_bucket(bucket).list_blobs(prefix=prefix)]
+
+        if prefix == path:
+            # no pattern strings, listing a single file or a folder
+            try:
+                # one blob exactly matches the requested path
+                names = [next(p for p in names if p == path)]
+            except StopIteration:
+                # no exact match, so we are listing based on prefix
+                # find files in this directory or subfolders
+                names = self._list_single(prefix, names)
+        # we have a pattern to match
+        else:
+            # for recursive glob, do not attempt to match folders, only files
+            if '**' in path:
+                names = fnmatch.filter(names, path)
+            else:
+                # make sure we can match folders in addition to blobs
+                candidates = set(names) | set(self._list_single(prefix, names))
+                names = fnmatch.filter(candidates, path)
+                # one more filter because fnmatch recurses single *
+                names = [name for name in names if name.count('/') == path.count('/')]
+
+        paths = ['gs://{}/{}'.format(bucket, name) for name in names]
+        return sorted(paths)
+
+    def _prefix(self, path):
+        # find the lowest prefix that doesn't include a pattern match
+        splits = path.split('/')
+        accumulate = []
+        while splits:
+            sub = splits.pop(0)
+            if any(x in sub for x in ['*', '?', '[', ']']):
+                break
+            accumulate.append(sub)
+        return '/'.join(accumulate) if accumulate else None
+
+    def _list_single(self, prefix, names):
+        # find files that are directly in the dir specified by prefix, not in subfolders
+        valid = set(n.replace(prefix, '').lstrip('/').split('/')[0] for n in names)
+        return [os.path.join(prefix, n) for n in valid]
+
     def access(self, paths):
+        """ Access multiple paths as file-like objects
+
+        This allows for optimization like parallel downloads
+
+        Parameters
+        ----------
+        paths: list of str
+            The paths of the files to access
+
+        Returns
+        -------
+        files: list of DataFile
+            A list of datafile instances, one for each input path
+        """
         datafiles = []
         for path in paths:
             datafiles.append(DataFile(path, StringIO()))
@@ -286,10 +353,14 @@ class GCSNativeFileSystem(GCSFileSystem):
             d.handle.seek(0)
             self._write(d)
 
-    def _blob(self, path):
+    def _split(self, path):
         bucket = path.replace(self.GCS, '').split('/')[0]
         prefix = "gs://{}".format(bucket)
         path = path[len(prefix) + 1:]
+        return bucket, path
+
+    def _blob(self, path):
+        bucket, path = self._split(path)
         return storage.Blob(path, self.client.get_bucket(bucket))
 
     def _read(self, datafile):
