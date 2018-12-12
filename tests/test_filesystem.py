@@ -5,6 +5,17 @@ import os
 TEST_STRING = 'test'
 
 
+def test_ls_directory(populated, fs):
+    ex = os.path.join(populated, '')
+    expected = [os.path.join(populated, 'c{}'.format(i)) for i in xrange(4)]
+
+    # one of the fixtures has an extra file
+    found = fs.ls(ex)
+    if len(found) > 4:
+        found = found[:-1]
+    assert(found == expected)
+
+
 def test_ls_wildcard(populated, fs):
     ex = os.path.join(populated, '*/part.1.csv')
     expected = [os.path.join(populated, 'c{}/part.1.csv'.format(i)) for i in xrange(4)]

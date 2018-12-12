@@ -13,7 +13,7 @@ def test_expand(populated, fs):
     for ex in ['', '*', '*/*', '**']:
         ex = os.path.join(populated, ex)
         paths = fs.ls(ex)
-        expanded = core._expand(paths, fs)
+        expanded = sorted(core._expand(paths, fs))
         assert(expanded == expected)
 
 
@@ -26,7 +26,7 @@ def test_expand_pattern(populated, fs):
     for ex in ['c[01]', 'c[01]/*']:
         ex = os.path.join(populated, ex)
         paths = fs.ls(ex)
-        expanded = core._expand(paths, fs)
+        expanded = sorted(core._expand(paths, fs))
         assert(expanded == expected)
 
 
