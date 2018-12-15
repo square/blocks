@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+import pytest
 
-TEST_STRING = 'test'
+
+TEST_STRING = b'test'
 
 
 def test_ls_directory(populated, fs):
     ex = os.path.join(populated, '')
-    expected = [os.path.join(populated, 'c{}'.format(i)) for i in xrange(4)]
+    expected = [os.path.join(populated, 'c{}'.format(i)) for i in range(4)]
 
     # one of the fixtures has an extra file
     found = fs.ls(ex)
@@ -18,26 +20,27 @@ def test_ls_directory(populated, fs):
 
 def test_ls_wildcard(populated, fs):
     ex = os.path.join(populated, '*/part.1.csv')
-    expected = [os.path.join(populated, 'c{}/part.1.csv'.format(i)) for i in xrange(4)]
+    expected = [os.path.join(populated, 'c{}/part.1.csv'.format(i)) for i in range(4)]
     assert(fs.ls(ex) == expected)
 
 
 def test_ls_double_wildcard(populated, fs):
     ex = os.path.join(populated, '**')
     expected = {os.path.join(populated, 'c{}/part.{}.csv'.format(i, j))
-                for i in xrange(4)
-                for j in xrange(4)}
+                for i in range(4)
+                for j in range(4)}
     assert(expected.issubset(set(fs.ls(ex))))
 
 
 def test_ls_pattern(populated, fs):
     ex = os.path.join(populated, '*/part.[01].csv')
     expected = [os.path.join(populated, 'c{}/part.{}.csv'.format(i, j))
-                for i in xrange(4)
-                for j in xrange(2)]
+                for i in range(4)
+                for j in range(2)]
     assert(fs.ls(ex) == expected)
 
 
+@pytest.mark.skipif(os.environ.get('CI') == 'true', reason='Need GCS access')
 def test_store_access(gcstemp, fs):
     paths = []
     with fs.store(gcstemp, ['ex1.txt', 'ex2.txt']) as datafiles:

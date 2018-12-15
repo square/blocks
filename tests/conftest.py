@@ -8,7 +8,7 @@ from delegator import run
 
 BUCKET = 'gs://blocks-example'
 
-if os.environ.get('ENVIRONMENT') == 'test':
+if os.environ.get('CI'):
     inputs = ['local']
     outputs = ['local']
     filesystems = ['gcs']
@@ -66,14 +66,14 @@ def populated(request, populated_local):
 
 @pytest.fixture(scope='session')
 def keys():
-    return pd.Series(['key{:02d}'.format(i) for i in xrange(40)])
+    return pd.Series(['key{:02d}'.format(i) for i in range(40)])
 
 
 @pytest.fixture()
 def randomdata():
     df = pd.DataFrame(
         np.random.rand(10, 10),
-        columns=['f{}'.format(i) for i in xrange(10)]
+        columns=['f{}'.format(i) for i in range(10)]
     )
     return df
 
@@ -105,8 +105,8 @@ def _populate(tmpdir):
         for r in range(4):
             df = pd.DataFrame(
                 np.random.rand(10, 10),
-                index=range(r*10, (r+1)*10),
-                columns=['f{}_{}'.format(c, i) for i in xrange(10)]
+                index=list(range(r*10, (r+1)*10)),
+                columns=['f{}_{}'.format(c, i) for i in range(10)]
             )
             df['key'] = ['key{:02d}'.format(i) for i in df.index]  # common key for merges
             df.to_csv(os.path.join(cgroup, 'part.{}.csv'.format(r)), index=False)

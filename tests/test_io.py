@@ -1,8 +1,12 @@
 import json
 import os
+import sys
+
 import pytest
 import numpy as np
-import blocks.io as io
+import six
+
+import blocks.dfio as io
 from blocks.filesystem import DataFile
 
 
@@ -21,14 +25,16 @@ def test_read_write_parquet(randomdata, datadir_local):
     df = _reload(randomdata, path)
     assert(np.isclose(df, randomdata).all().all())
 
-
 def test_read_write_parquet_unicode(randomdata, datadir_local):
     pytest.importorskip('pyarrow')
     pytest.importorskip('pandas', minversion='0.22.0')
-    # add a unicode column name
     randomdata[u'f10'] = randomdata['f9']
     path = os.path.join(datadir_local, 'tmp{}'.format('.pq'))
-    with pytest.warns(UserWarning):
+    if six.PY2:
+        # expect a warning about this in python2
+        with pytest.warns(UserWarning):
+            df = _reload(randomdata, path)
+    else:
         df = _reload(randomdata, path)
     assert(np.isclose(df, randomdata).all().all())
 
@@ -45,15 +51,15 @@ def test_read_write_avro(randomdata, datadir_local):
 def _write_schema(data, path):
     schema = {"type": "record", "name": "testschema"}
     schema["fields"] = [{"name": str(c), "type": "float"} for c in data.columns.values]
-    with open(path, 'wb') as f:
+    with open(path, 'w') as f:
         json.dump(schema, f)
 
 
 def _reload(data, path, **kwargs):
-    with open(path, 'w') as f:
+    with open(path, 'wb') as f:
         d = DataFile(path, f)
         io.write_df(data, d, **kwargs)
-    with open(path, 'r') as f:
+    with open(path, 'rb') as f:
         d = DataFile(path, f)
         df = io.read_df(d)
     return df

@@ -19,7 +19,7 @@ def test_divide_offset(datadir, randomdata, fs):
 
 
 def test_divide_cgroups(datadir, randomdata, fs):
-    randomdata.insert(0, 'key', range(10))
+    randomdata.insert(0, 'key', list(range(10)))
     cgroups_columns = {
         'cgroup1': ['key', 'f0', 'f1', 'f2'],
         'cgroup2': ['key', 'f3', 'f4', 'f5'],

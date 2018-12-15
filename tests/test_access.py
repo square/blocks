@@ -6,8 +6,8 @@ from blocks import core
 
 def test_expand(populated, fs):
     expected = [os.path.join(populated, 'c{}/part.{}.csv'.format(i, j))
-                for i in xrange(4)
-                for j in xrange(4)]
+                for i in range(4)
+                for j in range(4)]
 
     # All of these patterns should expand into the same set of files
     for ex in ['', '*', '*/*', '**']:
@@ -19,8 +19,8 @@ def test_expand(populated, fs):
 
 def test_expand_pattern(populated, fs):
     expected = [os.path.join(populated, 'c{}/part.{}.csv'.format(i, j))
-                for i in xrange(2)
-                for j in xrange(4)]
+                for i in range(2)
+                for j in range(4)]
 
     # All of these patterns should expand into the same set of files
     for ex in ['c[01]', 'c[01]/*']:
@@ -33,14 +33,14 @@ def test_expand_pattern(populated, fs):
 def test_cgroups():
     expanded = [
         'base/c{}/part.{}.csv'.format(i, j)
-        for i in xrange(4)
-        for j in xrange(4)
+        for i in range(4)
+        for j in range(4)
     ]
     cgroups = core._cgroups(expanded)
-    for i in xrange(4):
+    for i in range(4):
         key = 'c{}'.format(i)
         assert(key in cgroups)
-        assert(cgroups[key] == ['base/c{}/part.{}.csv'.format(i, j) for j in xrange(4)])
+        assert(cgroups[key] == ['base/c{}/part.{}.csv'.format(i, j) for j in range(4)])
 
 
 def test_access(populated, fs):
@@ -49,7 +49,7 @@ def test_access(populated, fs):
     cgroups = core._cgroups(expanded)
     cgroups = core._access(cgroups, fs)
     assert(len(cgroups) == 4)
-    for c, datafiles in cgroups.iteritems():
+    for c, datafiles in cgroups.items():
         assert(len(datafiles) == 4)
         for d in datafiles:
             assert(d.handle.read())
