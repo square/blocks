@@ -4,8 +4,9 @@ import numpy as np
 import pandas as pd
 import warnings
 
+from functools import reduce
 from collections import defaultdict, OrderedDict
-from blocks.io import read_df, write_df
+from blocks.dfio import read_df, write_df
 from blocks.filesystem import GCSFileSystem
 
 
@@ -281,11 +282,11 @@ def divide(
         for col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='ignore')
 
-    for cname, columns in cgroup_columns.iteritems():
+    for cname, columns in cgroup_columns.items():
         cgroup = df[columns]
 
         bucket = os.path.join(path, cname) if cname else path
-        rnames = ['part_{:05d}{}'.format(i+rgroup_offset, extension) for i in xrange(n_rgroup)]
+        rnames = ['part_{:05d}{}'.format(i+rgroup_offset, extension) for i in range(n_rgroup)]
         with filesystem.store(bucket, rnames) as datafiles:
             for rgroup, d in zip(np.array_split(cgroup, n_rgroup), datafiles):
                 write_df(rgroup.reset_index(drop=True), d, **write_args)
@@ -392,7 +393,7 @@ def _access(cgroups, filesystem):
     """ Access potentially cloud stored files, preserving cgroups
     """
     updated = {}
-    for cgroup, paths in cgroups.iteritems():
+    for cgroup, paths in cgroups.items():
         updated[cgroup] = filesystem.access(paths)
     return updated
 

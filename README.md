@@ -12,27 +12,25 @@ information.
 
 ### Setup
 
-For development, we use `pipenv` to manage the testing environment
-
 To install all dependencies for local development and testing, you can do
 
-    pipenv install
+    pip install -e .[dev]
 
 ### Tests
 
-There are two categories of tests
-
-* `py.test` which tests that your code does what you expect
-* `flake8` which verifies that you're using standard conventions in writing your code
+* `pytest` runs the unit tests
+* `flake8` to check style guidelines
 
 To run them locally:
 
-    pipenv run flake8 .
-    pipenv run pytest
+    flake8 .
+    pytest
 
 ### Continuous Integrations
 
-coming soon
+CI is handled through travis, and will run non-GCS tests on both 2.7 and 3.6.
+We may add cloud storage tests to travis soon, but for now tests should also be
+run locally to confirm that functionality works as well.
 
 ### Versions and Tags
 

@@ -8,28 +8,22 @@ import atexit
 import shutil
 
 from abc import ABCMeta, abstractmethod
-from cStringIO import StringIO
+from six import add_metaclass
+from io import BytesIO
 from collections import namedtuple
 from contextlib import contextmanager
 from google.cloud import storage
 
-try:
-    xrange
-except NameError:
-    xrange = range
-
-
 DataFile = namedtuple('DataFile', ['path', 'handle'])
 
 
+@add_metaclass(ABCMeta)
 class FileSystem(object):
     """ The required interface for any filesystem implementation
 
     See GCSFileSystem for a full implementation. This FileSystem is intended
     to be extendable to support cloud file systems, encryption strategies, etc...
     """
-    __metaclass__ = ABCMeta
-
     @abstractmethod
     def ls(self, path):
         """ List files correspond to path, including glob wildcards
@@ -118,6 +112,7 @@ class GCSFileSystem(FileSystem):
                     ['gsutil', 'ls', path],
                     stdout=subprocess.PIPE,
                     stderr=DEVNULL,
+                    universal_newlines=True,
                 )
                 stdout = p.communicate()[0]
             output = [line for line in stdout.split('\n') if line and line[-1] != ':']
@@ -156,7 +151,7 @@ class GCSFileSystem(FileSystem):
         # Break this into pieces so we don't hit OS limit for arguments
         # TODO: use getconf ARG_MAX and actually test number of bytes in sources
         CHUNK_SIZE = 1000
-        sources_chunks = [sources[x:x+CHUNK_SIZE] for x in xrange(0, len(sources), CHUNK_SIZE)]
+        sources_chunks = [sources[x:x+CHUNK_SIZE] for x in range(0, len(sources), CHUNK_SIZE)]
         for sources in sources_chunks:
             subprocess.check_call(cmd + sources + [dest])
 
@@ -183,7 +178,7 @@ class GCSFileSystem(FileSystem):
         datafiles = []
         for path in paths:
             local = os.path.join(tmpdir, os.path.basename(path))
-            datafiles.append(DataFile(path, open(local, 'r')))
+            datafiles.append(DataFile(path, open(local, 'rb')))
         return datafiles
 
     @contextmanager
@@ -218,7 +213,7 @@ class GCSFileSystem(FileSystem):
         for f in files:
             local = os.path.join(tmpdir, f)
             local_files.append(local)
-            datafiles.append(DataFile(os.path.join(bucket, f), open(local, 'w')))
+            datafiles.append(DataFile(os.path.join(bucket, f), open(local, 'wb')))
 
         yield datafiles
 
@@ -312,7 +307,7 @@ class GCSNativeFileSystem(GCSFileSystem):
         """
         datafiles = []
         for path in paths:
-            datafiles.append(DataFile(path, StringIO()))
+            datafiles.append(DataFile(path, BytesIO()))
         for datafile in datafiles:
             self._read(datafile)
         return datafiles
@@ -342,10 +337,10 @@ class GCSNativeFileSystem(GCSFileSystem):
         >>>     datafiles[0].handle.write('example 1')
         >>>     datafiles[1].handle.write('example 2')
         """
-        # Make StringIO instances that serve as the file handles
+        # Make BytesIO instances that serve as the file handles
         datafiles = []
         for f in files:
-            datafiles.append(DataFile(os.path.join(bucket, f), StringIO()))
+            datafiles.append(DataFile(os.path.join(bucket, f), BytesIO()))
 
         yield datafiles
 
@@ -365,7 +360,7 @@ class GCSNativeFileSystem(GCSFileSystem):
 
     def _read(self, datafile):
         if self.local(datafile.path):
-            with open(datafile.path, 'r') as f:
+            with open(datafile.path, 'rb') as f:
                 datafile.handle.write(f.read())
         else:
             self._blob(datafile.path).download_to_file(datafile.handle)

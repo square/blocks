@@ -1,7 +1,8 @@
 import os
+import six
 import warnings
 import pandas as pd
-
+from io import TextIOWrapper
 
 try:
     import pyarrow.parquet as pq
@@ -79,7 +80,8 @@ def write_df(df, datafile, **write_args):
         # make index=False the default for similar behaviour to other formats
         csvargs = {'index': False}
         csvargs.update(write_args)
-        return write_fn(datafile.handle, **csvargs)
+        buffer = datafile.handle if six.PY2 else TextIOWrapper(datafile.handle)
+        return write_fn(buffer, **csvargs)
     else:
         return write_fn(datafile.handle, **write_args)
 
