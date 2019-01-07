@@ -63,7 +63,16 @@ def assemble(path, cgroups=None, rgroups=None,
     # ----------------------------------------
     # Merge all cgroups
     # ----------------------------------------
-    return _merge_all(frames, merge=merge)
+    df = _merge_all(frames, merge=merge)
+
+    # ----------------------------------------
+    # Delete temporary files
+    # ----------------------------------------
+    for file in datafiles:
+        tmp_file_path = file.handle.name
+        if os.path.exists(tmp_file_path):
+            os.remove(file.handle.name)
+    return df
 
 
 def iterate(path, axis=-1, cgroups=None, rgroups=None,
