@@ -41,7 +41,11 @@ def read_df(datafile, **read_args):
 
     """
     datafile.handle.seek(0)  # ensure we start from the beginning of the file
-    return _readers[_get_extension(datafile.path)](datafile.handle, **read_args)
+    filetype, compression = _get_extension(datafile.path)
+    reader = _readers[filetype]
+    if reader in (pd.read_csv, pd.read_pickle) and compression is not None:
+        read_args["compression"] = compression
+    return reader(datafile.handle, **read_args)
 
 
 def write_df(df, datafile, **write_args):
@@ -65,7 +69,8 @@ def write_df(df, datafile, **write_args):
     Check the pandas doc for more information on the supported arguments
 
     """
-    write_name = _writers[_get_extension(datafile.path)]
+    extension, compression = _get_extension(datafile.path)
+    write_name = _writers[extension]
 
     if write_name == 'to_parquet' and not pd.Series(df.columns).map(type).eq(str).all():
         warnings.warn(
@@ -80,9 +85,13 @@ def write_df(df, datafile, **write_args):
         # make index=False the default for similar behaviour to other formats
         csvargs = {'index': False}
         csvargs.update(write_args)
+        if compression is not None:
+            csvargs["compression"] = compression
         buffer = datafile.handle if six.PY2 else TextIOWrapper(datafile.handle)
         return write_fn(buffer, **csvargs)
     else:
+        if compression is not None:
+            write_args["compression"] = compression
         return write_fn(datafile.handle, **write_args)
 
 
@@ -140,9 +149,11 @@ def _write_avro(df, handle, **write_args):
 def _get_extension(path):
     name, ext = os.path.splitext(path)
     # Support compression extensions, eg part.csv.gz
+    comp = None
     if ext in _compressions and '.' in name:
-        return _get_extension(name)
-    return ext
+        comp = ext
+        name, ext = os.path.splitext(name)
+    return ext, comp
 
 
 _readers = {
