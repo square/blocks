@@ -1,3 +1,4 @@
+import gzip
 import os
 import six
 import warnings
@@ -41,7 +42,11 @@ def read_df(datafile, **read_args):
 
     """
     datafile.handle.seek(0)  # ensure we start from the beginning of the file
-    return _readers[_get_extension(datafile.path)](datafile.handle, **read_args)
+    filetype, compression = _get_extension(datafile.path)
+    reader = _readers[filetype]
+    if reader in (pd.read_csv, pd.read_pickle) and compression is not None:
+        read_args["compression"] = compression
+    return reader(datafile.handle, **read_args)
 
 
 def write_df(df, datafile, **write_args):
@@ -65,7 +70,15 @@ def write_df(df, datafile, **write_args):
     Check the pandas doc for more information on the supported arguments
 
     """
-    write_name = _writers[_get_extension(datafile.path)]
+    extension, compression = _get_extension(datafile.path)
+    write_name = _writers[extension]
+    # infer compression from filepath or from explicit arg
+    compression = compression or write_args.get('compression')
+    buffer = datafile.handle
+
+    # Some customizations for different file types
+    if write_name == 'to_avro':
+        return _write_avro(df, buffer, **write_args)
 
     if write_name == 'to_parquet' and not pd.Series(df.columns).map(type).eq(str).all():
         warnings.warn(
@@ -73,17 +86,23 @@ def write_df(df, datafile, **write_args):
             'Blocks will attempt to convert them to strings.'
         )
         df.columns = df.columns.astype('str')
-    if write_name == 'to_avro':
-        return _write_avro(df, datafile.handle, **write_args)
-    write_fn = getattr(df, write_name)
+
     if write_name == 'to_csv':
         # make index=False the default for similar behaviour to other formats
-        csvargs = {'index': False}
-        csvargs.update(write_args)
-        buffer = datafile.handle if six.PY2 else TextIOWrapper(datafile.handle)
-        return write_fn(buffer, **csvargs)
-    else:
-        return write_fn(datafile.handle, **write_args)
+        write_args['index'] = write_args.get('index', False)
+
+    # For csv and pickle we have to manually compress
+    if compression == 'gzip' and write_name in ('to_csv', 'to_pickle'):
+        buffer = gzip.GzipFile(fileobj=buffer, mode='w')
+    elif compression is not None and write_name in ('to_csv', 'to_pickle'):
+        raise ValueError('Compression {} is not supported for CSV/Pickle'.format(compression))
+
+    # And for 23 compatibility need a textiowrapper for csv
+    if write_name == 'to_csv' and six.PY3:
+        buffer = TextIOWrapper(buffer)
+
+    write_fn = getattr(df, write_name)
+    return write_fn(buffer, **write_args)
 
 
 def _read_parquet(path, **read_args):
@@ -140,9 +159,11 @@ def _write_avro(df, handle, **write_args):
 def _get_extension(path):
     name, ext = os.path.splitext(path)
     # Support compression extensions, eg part.csv.gz
+    comp = None
     if ext in _compressions and '.' in name:
-        return _get_extension(name)
-    return ext
+        comp = ext
+        name, ext = os.path.splitext(name)
+    return ext, _compressions.get(comp)
 
 
 _readers = {
@@ -162,9 +183,9 @@ _writers = {
     '.avro': 'to_avro',
 }
 
-_compressions = [
-    '.gz',
-    '.bz2',
-    '.zip',
-    '.xz'
-]
+_compressions = {
+    '.gz': 'gzip',
+    '.bz2': 'bz2',
+    '.zip': 'zip',
+    '.xz': 'xz'
+}
