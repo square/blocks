@@ -69,9 +69,10 @@ def assemble(path, cgroups=None, rgroups=None,
     # Delete temporary files
     # ----------------------------------------
     for file in datafiles:
-        tmp_file_path = file.handle.name
-        if os.path.exists(tmp_file_path):
-            os.remove(file.handle.name)
+        if hasattr(file.handle, 'name'):
+            tmp_file_path = file.handle.name
+            if os.path.exists(tmp_file_path):
+                os.remove(file.handle.name)
     return df
 
 
