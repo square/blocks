@@ -46,6 +46,8 @@ def read_df(datafile, **read_args):
     reader = _readers[filetype]
     if reader in (pd.read_csv, pd.read_pickle) and compression is not None:
         read_args["compression"] = compression
+    elif reader in (pd.read_csv, pd.read_pickle):
+        read_args["compression"] = None  # default "infer" incompatible with handles as of 0.24
     return reader(datafile.handle, **read_args)
 
 
@@ -92,9 +94,13 @@ def write_df(df, datafile, **write_args):
         write_args['index'] = write_args.get('index', False)
 
     # For csv and pickle we have to manually compress
-    if compression == 'gzip' and write_name in ('to_csv', 'to_pickle'):
+    csv_pkl = write_name in ('to_csv', 'to_pickle')
+    if csv_pkl:
+        write_args['compression'] = None  # default "infer" incompatible with handles as of 0.24
+
+    if csv_pkl and compression == 'gzip':
         buffer = gzip.GzipFile(fileobj=buffer, mode='w')
-    elif compression is not None and write_name in ('to_csv', 'to_pickle'):
+    elif csv_pkl and compression is not None:
         raise ValueError('Compression {} is not supported for CSV/Pickle'.format(compression))
 
     # And for 23 compatibility need a textiowrapper for csv
