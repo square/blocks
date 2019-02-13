@@ -8,6 +8,7 @@ with open('README.md') as readme_file:
 
 requirements = [
     'six',
+    'wrapt',
     'pandas',
     'google-cloud-storage',
 ]
