@@ -6,6 +6,9 @@ import subprocess
 import tempfile
 import atexit
 import shutil
+import time
+import wrapt
+import requests
 
 from abc import ABCMeta, abstractmethod
 from six import add_metaclass
@@ -15,6 +18,21 @@ from contextlib import contextmanager
 from google.cloud import storage
 
 DataFile = namedtuple('DataFile', ['path', 'handle'])
+
+
+@wrapt.decorator
+def _retry_with_backoff(wrapped, instance, args, kwargs):
+    trial = 0
+    while True:
+        wait = 2**(trial+2) # 4s up to 128s
+        try:
+            return wrapped(*args, **kwargs)
+        except requests.exceptions.ConnectionError:
+            if trial == 6:
+                raise
+            logging.info('{} failed to connect, retrying after {}s'.format(wrapped.__name__, wait))
+            trial += 1
+        time.sleep(wait)
 
 
 @add_metaclass(ABCMeta)
@@ -354,6 +372,7 @@ class GCSNativeFileSystem(GCSFileSystem):
         path = path[len(prefix) + 1:]
         return bucket, path
 
+    @_retry_with_backoff
     def _blob(self, path):
         bucket, path = self._split(path)
         return storage.Blob(path, self.client.get_bucket(bucket))
