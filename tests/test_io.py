@@ -9,7 +9,7 @@ from blocks.filesystem import DataFile
 
 
 def test_read_write_native_formats(randomdata, datadir_local):
-    extensions = ['.pkl', '.csv', '.pkl.gz', '.csv.gz']
+    extensions = ['.pkl', '.csv', '.json', '.json.gz', '.pkl.gz', '.csv.gz']
     for extension in extensions:
         path = os.path.join(datadir_local, 'tmp{}'.format(extension))
         df = _reload(randomdata, path)

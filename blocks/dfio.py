@@ -6,12 +6,6 @@ import pandas as pd
 from io import TextIOWrapper
 
 try:
-    import pyarrow.parquet as pq
-    parquet = True
-except ImportError:
-    parquet = False
-
-try:
     import fastavro as avro
     avro_imported = True
 except ImportError:
@@ -44,10 +38,15 @@ def read_df(datafile, **read_args):
     datafile.handle.seek(0)  # ensure we start from the beginning of the file
     filetype, compression = _get_extension(datafile.path)
     reader = _readers[filetype]
-    if reader in (pd.read_csv, pd.read_pickle) and compression is not None:
+    if reader in (pd.read_csv, pd.read_pickle, pd.read_json) and compression is not None:
         read_args["compression"] = compression
-    elif reader in (pd.read_csv, pd.read_pickle):
+    elif reader in (pd.read_csv, pd.read_pickle, pd.read_json):
         read_args["compression"] = None  # default "infer" incompatible with handles as of 0.24
+    if reader == pd.read_json:
+        # Default json file is newline delimited json records, but can be overwritten
+        defaults = {'lines': True, 'orient': 'records'}
+        defaults.update(read_args)
+        read_args = defaults
     return reader(datafile.handle, **read_args)
 
 
@@ -89,47 +88,31 @@ def write_df(df, datafile, **write_args):
         )
         df.columns = df.columns.astype('str')
 
+    if write_name == 'to_json':
+        defaults = {'lines': True, 'orient': 'records'}
+        defaults.update(write_args)
+        write_args = defaults
+
     if write_name == 'to_csv':
         # make index=False the default for similar behaviour to other formats
         write_args['index'] = write_args.get('index', False)
 
     # For csv and pickle we have to manually compress
-    csv_pkl = write_name in ('to_csv', 'to_pickle')
-    if csv_pkl:
+    manual_compress = write_name in ('to_csv', 'to_pickle', 'to_json')
+    if manual_compress:
         write_args['compression'] = None  # default "infer" incompatible with handles as of 0.24
 
-    if csv_pkl and compression == 'gzip':
+    if manual_compress and compression == 'gzip':
         buffer = gzip.GzipFile(fileobj=buffer, mode='w')
-    elif csv_pkl and compression is not None:
+    elif manual_compress and compression is not None:
         raise ValueError('Compression {} is not supported for CSV/Pickle'.format(compression))
 
-    # And for 23 compatibility need a textiowrapper for csv
-    if write_name == 'to_csv' and six.PY3:
+    # And for 23 compatibility need a textiowrapper for text formats
+    if write_name in ('to_csv', 'to_json') and six.PY3:
         buffer = TextIOWrapper(buffer)
 
     write_fn = getattr(df, write_name)
     return write_fn(buffer, **write_args)
-
-
-def _read_parquet(path, **read_args):
-    """ Read a dataframe from parquet file
-
-    Parameters
-    ----------
-    path : str
-        Path to the parquet file
-    read_args : optional
-        All keyword args are passed to pyarrow.parquet.read_table
-
-    Returns
-    -------
-    data : pd.DataFrame
-
-    """
-    if not parquet:
-        raise ImportError('Parquet support requires pyarrow.\n'
-                          'Install blocks with the [pq] option or `pip install pyarrow`')
-    return pq.read_table(path, **read_args).to_pandas()
 
 
 def _read_avro(handle, **read_args):
@@ -173,11 +156,12 @@ def _get_extension(path):
 
 
 _readers = {
-    '.pq': _read_parquet,
-    '.parquet': _read_parquet,
+    '.pq': pd.read_parquet,
+    '.parquet': pd.read_parquet,
     '.csv': pd.read_csv,
     '.pkl': pd.read_pickle,
     '.avro': _read_avro,
+    '.json': pd.read_json,
 }
 
 
@@ -187,6 +171,7 @@ _writers = {
     '.csv': 'to_csv',
     '.pkl': 'to_pickle',
     '.avro': 'to_avro',
+    '.json': 'to_json',
 }
 
 _compressions = {
