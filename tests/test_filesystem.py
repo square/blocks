@@ -3,7 +3,6 @@
 import os
 import pytest
 
-
 TEST_STRING = b'test'
 
 
@@ -51,3 +50,32 @@ def test_store_access(gcstemp, fs):
     datafiles = fs.access(paths)
     for d in datafiles:
         assert(d.handle.read() == TEST_STRING)
+
+
+def test_open(populated, fs):
+    with fs.open(os.path.join(populated, 'c0/part.0.csv'), 'r') as f:
+        assert(f.readline() == 'f0_0,f0_1,f0_2,f0_3,f0_4,f0_5,f0_6,f0_7,f0_8,f0_9,key\n')
+
+
+def test_copy_recursive_to_local(populated, tmpdir, fs):
+    dest = str(tmpdir)
+    fs.cp(populated, dest, recursive=True)
+    source = [p.replace(populated, '') for p in fs.ls(populated + '/**')]
+    copy = fs.ls(dest + '/**')
+    assert(s in c for s, c in zip(source, copy))
+
+
+def test_copy_recursive_matched(populated, fs):
+    dest = populated.replace('data', 'copy')
+    fs.cp(populated, dest, recursive=True)
+    source = [p.replace(populated, '') for p in fs.ls(populated + '/**')]
+    copy = fs.ls(dest + '/**')
+    assert(s in c for s, c in zip(source, copy))
+
+
+def test_rm(populated, fs):
+    dest = populated.replace('data', 'copy')
+    fs.cp([os.path.join(populated, '')], dest, recursive=True)
+    assert(fs.ls(dest))
+    fs.rm([dest], recursive=True)
+    assert(fs.ls(dest) == [])
