@@ -451,10 +451,15 @@ class GCSNativeFileSystem(GCSFileSystem):
             A BytesIO handle for the specified path, works like a file object
         """
         datafile = DataFile(path, BytesIO())
-        self._read(datafile)
+        if mode.startswith('r'):
+            self._read(datafile)
         if mode == 'r' and PY3:
             datafile.handle = TextIOWrapper(datafile.handle)
+
         yield datafile.handle
+
+        if mode.startswith('w'):
+            self._write(datafile)
         datafile.handle.close()
 
     def access(self, paths):
@@ -562,6 +567,10 @@ class GCSNativeFileSystem(GCSFileSystem):
 
     def _write(self, datafile):
         if self.local(datafile.path):
+            dirname = os.path.dirname(datafile.path)
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname)
+
             with open(datafile.path, 'w') as f:
                 f.write(datafile.handle.read())
         else:
