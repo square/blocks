@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
-import pytest
+from uuid import uuid4
 
 TEST_STRING = b'test'
 
@@ -39,10 +39,24 @@ def test_ls_pattern(populated, fs):
     assert(fs.ls(ex) == expected)
 
 
-@pytest.mark.skipif(os.environ.get('CI') == 'true', reason='Need GCS access')
-def test_store_access(gcstemp, fs):
+def test_open_read(populated, fs):
+    with fs.open(os.path.join(populated, 'c0/part.0.csv'), 'r') as f:
+        assert(f.readline() == 'f0_0,f0_1,f0_2,f0_3,f0_4,f0_5,f0_6,f0_7,f0_8,f0_9,key\n')
+
+
+def test_open_write(temp, fs):
+    content = str(uuid4())
+    path = os.path.join(temp, 'content')
+    with fs.open(path, 'w') as f:
+        f.write(content)
+
+    with fs.open(path, 'r') as f:
+        assert(f.read() == content)
+
+
+def test_store_access(temp, fs):
     paths = []
-    with fs.store(gcstemp, ['ex1.txt', 'ex2.txt']) as datafiles:
+    with fs.store(temp, ['ex1.txt', 'ex2.txt']) as datafiles:
         for d in datafiles:
             paths.append(d.path)
             d.handle.write(TEST_STRING)
@@ -50,11 +64,6 @@ def test_store_access(gcstemp, fs):
     datafiles = fs.access(paths)
     for d in datafiles:
         assert(d.handle.read() == TEST_STRING)
-
-
-def test_open(populated, fs):
-    with fs.open(os.path.join(populated, 'c0/part.0.csv'), 'r') as f:
-        assert(f.readline() == 'f0_0,f0_1,f0_2,f0_3,f0_4,f0_5,f0_6,f0_7,f0_8,f0_9,key\n')
 
 
 def test_copy_recursive_to_local(populated, tmpdir, fs):

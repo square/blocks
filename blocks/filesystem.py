@@ -223,10 +223,18 @@ class GCSFileSystem(FileSystem):
             A python file opened to the provided path (uses a local temporary copy that is removed)
         """
         with tempfile.NamedTemporaryFile() as nf:
-            self.cp(path, nf.name)
+            if mode.startswith('r'):
+                self.cp(path, nf.name)
+
             nf.seek(0)
+
             with open(nf.name, mode) as f:
                 yield f
+
+            nf.seek(0)
+
+            if mode.startswith('w'):
+                self.cp(nf.name, path)
 
     def access(self, paths):
         """ Access multiple paths as file-like objects
@@ -518,7 +526,6 @@ class GCSNativeFileSystem(GCSFileSystem):
         yield datafiles
 
         for d in datafiles:
-            d.handle.seek(0)
             self._write(d)
 
     def _prefix(self, path):
@@ -566,6 +573,7 @@ class GCSNativeFileSystem(GCSFileSystem):
         datafile.handle.seek(0)
 
     def _write(self, datafile):
+        datafile.handle.seek(0)
         if self.local(datafile.path):
             dirname = os.path.dirname(datafile.path)
             if not os.path.isdir(dirname):
