@@ -35,7 +35,6 @@ def read_df(datafile, **read_args):
     Check the pandas doc for more information on the supported arguments
 
     """
-    datafile.handle.seek(0)  # ensure we start from the beginning of the file
     filetype, compression = _get_extension(datafile.path)
     reader = _readers[filetype]
     if reader in (pd.read_csv, pd.read_pickle, pd.read_json) and compression is not None:

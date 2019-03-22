@@ -11,10 +11,12 @@ BUCKET = 'gs://blocks-example'
 if os.environ.get('CI'):
     inputs = ['local']
     outputs = ['local']
+    temps = ['local']
     filesystems = ['gcs']
 else:
     inputs = ['local', 'gcs', 'gcs_extra']
     outputs = ['local', 'gcs']
+    temps = ['local', 'gcs']
     filesystems = ['gcs', 'native']
 
 
@@ -27,11 +29,16 @@ def fs(request):
         return GCSNativeFileSystem()
 
 
-@pytest.fixture(scope='function')
-def gcstemp():
-    path = os.path.join(BUCKET, 'temp')
-    yield path
-    run('gsutil -m rm -r {}'.format(path))
+@pytest.fixture(scope='function', params=temps)
+def temp(request, tmpdir_factory):
+    if request.param == 'local':
+        path = str(tmpdir_factory.mktemp('temp'))
+        yield path
+
+    if request.param == 'gcs':
+        path = os.path.join(BUCKET, 'temp')
+        yield path
+        run('gsutil -m rm -r {}'.format(path))
 
 
 @pytest.fixture(scope='session')
