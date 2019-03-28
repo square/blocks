@@ -316,8 +316,14 @@ class GCSNativeFileSystem(GCSFileSystem):
     entirely in memory rather than using tempfiles.
     """
     def __init__(self, *args, **kwargs):
-        self.client = storage.Client()
+        self._client = None
         super(GCSNativeFileSystem, self).__init__(*args, **kwargs)
+
+    def client(self):
+        # Load client only when needed, so that this can be used for local paths without connecting
+        if self._client is None:
+            self._client = storage.Client()
+        return self._client
 
     def ls(self, path):
         """ List all files at the specified path, supports globbing
@@ -334,7 +340,7 @@ class GCSNativeFileSystem(GCSFileSystem):
 
         if prefix == path:
             # no pattern matching
-            iterator = self.client.get_bucket(bucket).list_blobs(prefix=prefix, delimiter='/')
+            iterator = self._list_blobs(bucket, prefix=prefix, delimiter='/')
             names = [b.name for b in iterator]
             names += iterator.prefixes
             # if we ran ls('gs://bucket/dir') we need to rerun with '/' to get the content
@@ -342,7 +348,7 @@ class GCSNativeFileSystem(GCSFileSystem):
                 return self.ls(os.path.join('gs://' + bucket, path, ''))
         else:
             # we have a pattern to match
-            names = [b.name for b in self.client.get_bucket(bucket).list_blobs(prefix=prefix)]
+            names = [b.name for b in self._list_blobs(bucket, prefix=prefix)]
             # for recursive glob, do not attempt to match folders, only files
             if '**' in path:
                 names = fnmatch.filter(names, path)
@@ -461,12 +467,15 @@ class GCSNativeFileSystem(GCSFileSystem):
         datafile = DataFile(path, BytesIO())
         if mode.startswith('r'):
             self._read(datafile)
-        if mode == 'r' and PY3:
-            datafile.handle = TextIOWrapper(datafile.handle)
+        if not mode.endswith('b') and PY3:
+            handle = TextIOWrapper(datafile.handle)
+        else:
+            handle = datafile.handle
 
-        yield datafile.handle
+        yield handle
 
         if mode.startswith('w'):
+            handle.seek(0)
             self._write(datafile)
         datafile.handle.close()
 
@@ -551,19 +560,24 @@ class GCSNativeFileSystem(GCSFileSystem):
         return bucket, path
 
     @_retry_with_backoff
+    def _list_blobs(self, bucket, prefix=None, delimiter=None):
+        return self.client().get_bucket(bucket).list_blobs(prefix=prefix, delimiter=delimiter)
+
+    @_retry_with_backoff
     def _blob(self, path):
         bucket, path = self._split(path)
-        return storage.Blob(path, self.client.get_bucket(bucket))
+        return storage.Blob(path, self.client().get_bucket(bucket))
 
     @_retry_with_backoff
     def _transfer(self, path1, path2):
         bucket1, path1 = self._split(path1)
         bucket2, path2 = self._split(path2)
-        source_bucket = self.client.get_bucket(bucket1)
+        source_bucket = self.client().get_bucket(bucket1)
         source_blob = source_bucket.blob(path1)
-        destination_bucket = self.client.get_bucket(bucket2)
+        destination_bucket = self.client().get_bucket(bucket2)
         source_bucket.copy_blob(source_blob, destination_bucket, path2)
 
+    @_retry_with_backoff
     def _read(self, datafile):
         if self.local(datafile.path):
             with open(datafile.path, 'rb') as f:
@@ -572,6 +586,7 @@ class GCSNativeFileSystem(GCSFileSystem):
             self._blob(datafile.path).download_to_file(datafile.handle)
         datafile.handle.seek(0)
 
+    @_retry_with_backoff
     def _write(self, datafile):
         datafile.handle.seek(0)
         if self.local(datafile.path):
@@ -579,7 +594,7 @@ class GCSNativeFileSystem(GCSFileSystem):
             if not os.path.isdir(dirname):
                 os.makedirs(dirname)
 
-            with open(datafile.path, 'w') as f:
+            with open(datafile.path, 'wb') as f:
                 f.write(datafile.handle.read())
         else:
             self._blob(datafile.path).upload_from_file(datafile.handle)
