@@ -2,7 +2,7 @@
 
 __author__ = """Bradley Axen"""
 __email__ = 'baxen@squareup.com'
-__version__ = '0.6.2'
+__version__ = '0.6.3'
 
 
 from blocks.core import assemble, iterate, partitioned, divide, place  # NOQA
