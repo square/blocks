@@ -26,7 +26,7 @@ def _retry_with_backoff(wrapped, instance, args, kwargs):
         wait = 2**(trial+2)  # 4s up to 128s
         try:
             return wrapped(*args, **kwargs)
-        except requests.exceptions.ConnectionError:
+        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
             if trial == 6:
                 raise
             logging.info('{} failed to connect, retrying after {}s'.format(wrapped.__name__, wait))
