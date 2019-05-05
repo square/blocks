@@ -1,20 +1,21 @@
+import atexit
 import fnmatch
-import os
 import glob
 import logging
+import os
+import shutil
 import subprocess
 import tempfile
-import atexit
-import shutil
 import time
-import wrapt
-import requests
 from abc import ABCMeta, abstractmethod
-from six import add_metaclass, PY3, string_types
-from io import BytesIO, TextIOWrapper
 from collections import namedtuple
 from contextlib import contextmanager
+
+import requests
+import wrapt
 from google.cloud import storage
+from io import BytesIO, TextIOWrapper
+from six import PY3, add_metaclass, string_types
 
 DataFile = namedtuple('DataFile', ['path', 'handle'])
 
@@ -23,13 +24,13 @@ DataFile = namedtuple('DataFile', ['path', 'handle'])
 def _retry_with_backoff(wrapped, instance, args, kwargs):
     trial = 0
     while True:
-        wait = 2**(trial+2)  # 4s up to 128s
+        wait = 2**(trial + 2)  # 4s up to 128s
         try:
             return wrapped(*args, **kwargs)
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
             if trial == 6:
                 raise
-            logging.info('{} failed to connect, retrying after {}s'.format(wrapped.__name__, wait))
+            logging.info('%s failed to connect, retrying after %ds', wrapped.__name__, wait)
             trial += 1
         time.sleep(wait)
 
@@ -122,7 +123,7 @@ class GCSFileSystem(FileSystem):
         path : str
             The path to the file or directory to list; supports wildcards
         """
-        logging.info('Globbing file content in {}'.format(path))
+        logging.info('Globbing file content in %s', path)
         if not self.local(path):
             with open(os.devnull, 'w') as DEVNULL:
                 p = subprocess.Popen(
@@ -170,7 +171,7 @@ class GCSFileSystem(FileSystem):
             cmd.append('-r')
 
         CHUNK_SIZE = 1000
-        paths_chunks = [paths[x:x+CHUNK_SIZE] for x in range(0, len(paths), CHUNK_SIZE)]
+        paths_chunks = [paths[x:x + CHUNK_SIZE] for x in range(0, len(paths), CHUNK_SIZE)]
         for paths in paths_chunks:
             subprocess.check_call(cmd + paths)
 
@@ -190,7 +191,7 @@ class GCSFileSystem(FileSystem):
             sources = [sources]
 
         summary = ', '.join(sources)
-        logging.info('Copying {} to {}...'.format(summary, dest))
+        logging.info('Copying %s to %s...', summary, dest)
 
         if any(self.GCS in x for x in sources + [dest]):
             # at least one location is on GCS
@@ -202,7 +203,7 @@ class GCSFileSystem(FileSystem):
             cmd.append('-r')
 
         CHUNK_SIZE = 1000
-        sources_chunks = [sources[x:x+CHUNK_SIZE] for x in range(0, len(sources), CHUNK_SIZE)]
+        sources_chunks = [sources[x:x + CHUNK_SIZE] for x in range(0, len(sources), CHUNK_SIZE)]
         for sources in sources_chunks:
             subprocess.check_call(cmd + sources + [dest])
 
@@ -328,7 +329,7 @@ class GCSNativeFileSystem(GCSFileSystem):
     def ls(self, path):
         """ List all files at the specified path, supports globbing
         """
-        logging.info('Globbing file content in {}'.format(path))
+        logging.info('Globbing file content in %s', path)
 
         # use GCSFileSystem's implementation for local paths
         if self.local(path):

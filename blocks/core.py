@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import os
+import warnings
+from collections import OrderedDict, defaultdict
+from functools import reduce
+
 import numpy as np
 import pandas as pd
-import warnings
-
-from functools import reduce
-from collections import defaultdict, OrderedDict
 from blocks.dfio import read_df, write_df
 from blocks.filesystem import GCSFileSystem
 
@@ -210,7 +210,7 @@ def partitioned(path, cgroups=None, rgroups=None,
             args = read_args.copy()
             if cgroup in cgroup_args:
                 args.update(cgroup_args[cgroup])
-            frames.append(read_df(datafile,  **args))
+            frames.append(read_df(datafile, **args))
         return _merge_all(frames, merge=merge)
 
     for rgroup in _shared_rgroups(grouped):
@@ -286,7 +286,7 @@ def divide(
 
     # Add leading dot if not in extension
     if extension[0] != '.':
-        extension = '.'+extension
+        extension = '.' + extension
 
     if convert:
         for col in df.columns:
@@ -296,7 +296,7 @@ def divide(
         cgroup = df[columns]
 
         bucket = os.path.join(path, cname) if cname else path
-        rnames = ['part_{:05d}{}'.format(i+rgroup_offset, extension) for i in range(n_rgroup)]
+        rnames = ['part_{:05d}{}'.format(i + rgroup_offset, extension) for i in range(n_rgroup)]
         with filesystem.store(bucket, rnames) as datafiles:
             for rgroup, d in zip(np.array_split(cgroup, n_rgroup), datafiles):
                 write_df(rgroup.reset_index(drop=True), d, **write_args)

@@ -1,8 +1,9 @@
 import gzip
 import os
-import six
 import warnings
+
 import pandas as pd
+import six
 from io import TextIOWrapper
 
 try:
