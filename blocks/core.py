@@ -246,6 +246,7 @@ def divide(
         extension='.pq',
         convert=False,
         filesystem=GCSFileSystem(),
+        prefix=None,
         **write_args
 ):
     """ Split a dataframe into rgroups/cgroups and save to disk
@@ -272,7 +273,7 @@ def divide(
     extension : str, default .pq
         The file extension for the dataframe (file type inferred from this extension
     convert : bool, default False
-        If true attempt to coerce types to numeric. This can avoid issues with amiguous
+        If true attempt to coerce types to numeric. This can avoid issues with ambiguous
         object columns but requires additional time
     filesystem : blocks.filesystem.FileSystem or similar
         A filesystem object that implements the blocks.FileSystem API
@@ -297,6 +298,8 @@ def divide(
 
         bucket = os.path.join(path, cname) if cname else path
         rnames = ['part_{:05d}{}'.format(i+rgroup_offset, extension) for i in range(n_rgroup)]
+        if prefix is not None:
+            rnames = [prefix + '_' + rn for rn in rnames]
         with filesystem.store(bucket, rnames) as datafiles:
             for rgroup, d in zip(np.array_split(cgroup, n_rgroup), datafiles):
                 write_df(rgroup.reset_index(drop=True), d, **write_args)
