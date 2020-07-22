@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import six
 import blocks.dfio as io
-from blocks.filesystem import DataFile
+from blocks.datafile import LocalDataFile
 
 
 def test_read_write_native_formats(randomdata, datadir_local):
@@ -22,15 +22,13 @@ def test_compression_csv(randomdata, datadir_local):
     randomdata.to_csv(path, index=False, compression="gzip")
 
     # read compressed with blocks
-    with open(path, "rb") as f:
-        d = DataFile(path, f)
-        df = io.read_df(d)
+    d = LocalDataFile(path, path)
+    df = io.read_df(d)
     assert np.isclose(df, randomdata).all().all()
 
     # write compressed with blocks
-    with open(path, "wb") as f:
-        d = DataFile(path, f)
-        io.write_df(randomdata, d)
+    d = LocalDataFile(path, path)
+    io.write_df(randomdata, d)
     # read compressed with pandas
     df = pd.read_csv(path, compression="gzip")
     assert np.isclose(df, randomdata).all().all()
@@ -42,15 +40,13 @@ def test_compression_pickle(randomdata, datadir_local):
     randomdata.to_pickle(path, compression="gzip")
 
     # read compressed with blocks
-    with open(path, "rb") as f:
-        d = DataFile(path, f)
-        df = io.read_df(d)
+    d = LocalDataFile(path, path)
+    df = io.read_df(d)
     assert np.isclose(df, randomdata).all().all()
 
     # write compressed with blocks
-    with open(path, "wb") as f:
-        d = DataFile(path, f)
-        io.write_df(randomdata, d)
+    d = LocalDataFile(path, path)
+    io.write_df(randomdata, d)
     # read compressed with pandas
     df = pd.read_pickle(path, compression="gzip")
     assert np.isclose(df, randomdata).all().all()
@@ -64,15 +60,13 @@ def test_compression_parquet(randomdata, datadir_local):
     randomdata.to_parquet(path, compression="gzip")
 
     # read compressed with blocks
-    with open(path, "rb") as f:
-        d = DataFile(path, f)
-        df = io.read_df(d)
+    d = LocalDataFile(path, path)
+    df = io.read_df(d)
     assert np.isclose(df, randomdata).all().all()
 
     # write compressed with blocks
-    with open(path, "wb") as f:
-        d = DataFile(path, f)
-        io.write_df(randomdata, d)
+    d = LocalDataFile(path, path)
+    io.write_df(randomdata, d)
     # read compressed with pandas
     df = pd.read_parquet(path)
     assert np.isclose(df, randomdata).all().all()
@@ -117,10 +111,8 @@ def _write_schema(data, path):
 
 
 def _reload(data, path, **kwargs):
-    with open(path, "wb") as f:
-        d = DataFile(path, f)
-        io.write_df(data, d, **kwargs)
-    with open(path, "rb") as f:
-        d = DataFile(path, f)
-        df = io.read_df(d)
+    d = LocalDataFile(path, path)
+    io.write_df(data, d, **kwargs)
+    d = LocalDataFile(path, path)
+    df = io.read_df(d)
     return df

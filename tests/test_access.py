@@ -52,4 +52,5 @@ def test_access(populated, fs):
     for c, datafiles in cgroups.items():
         assert len(datafiles) == 4
         for d in datafiles:
-            assert d.handle.read()
+            with d.handle() as f:
+                assert f.read()

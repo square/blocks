@@ -63,11 +63,13 @@ def test_store_access(temp, fs):
     with fs.store(temp, ["ex1.txt", "ex2.txt"]) as datafiles:
         for d in datafiles:
             paths.append(d.path)
-            d.handle.write(TEST_STRING)
+            with d.handle("wb") as f:
+                f.write(TEST_STRING)
 
     datafiles = fs.access(paths)
     for d in datafiles:
-        assert d.handle.read() == TEST_STRING
+        with d.handle("rb") as f:
+            assert f.read() == TEST_STRING
 
 
 def test_copy_recursive_to_local(populated, tmpdir, fs):
