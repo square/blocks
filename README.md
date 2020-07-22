@@ -1,7 +1,7 @@
 # Blocks
 
 Blocks provides a simple interface to read, organize, and manipulate structured data in files
-on local and cloud storage. See the [documentation](https://sq-blocks.readthedocs.io) for more 
+on local and cloud storage. See the [documentation](https://sq-blocks.readthedocs.io) for more
 information.
 
     pip install sq-blocks
@@ -19,11 +19,9 @@ To install all dependencies for local development and testing, you can do
 ### Tests
 
 * `pytest` runs the unit tests
-* `flake8` to check style guidelines
 
 To run them locally:
 
-    flake8 .
     pytest
 
 ### Continuous Integrations
@@ -44,6 +42,20 @@ with
 
     git push --tags
 
+### Formatting
+
+We use pre-commit to ensure consistent formatting, to make sure you run the
+hooks:
+
+    pre-commit install
+
+### Docs
+
+The docs are generated from the code with
+[sphinx](https://www.sphinx-doc.org/en/master/), and can be tested locally:
+
+    cd docs
+    make html
 
 ## License
 
