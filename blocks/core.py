@@ -3,11 +3,12 @@ import os
 import numpy as np
 import pandas as pd
 import warnings
+import pickle as _pickle
 
 from functools import reduce
 from collections import defaultdict, OrderedDict
 from blocks.dfio import read_df, write_df
-from blocks.filesystem import GCSFileSystem
+from blocks.filesystem import GCSFileSystem, GCSNativeFileSystem
 
 
 def assemble(
@@ -329,6 +330,38 @@ def divide(
         with filesystem.store(bucket, rnames) as datafiles:
             for rgroup, d in zip(np.array_split(cgroup, n_rgroup), datafiles):
                 write_df(rgroup.reset_index(drop=True), d, **write_args)
+
+
+def pickle(obj, path, filesystem=GCSNativeFileSystem()):
+    """ Save a pickle of obj at the specified path
+
+    Parameters
+    ----------
+    obj : Object
+        Any pickle compatible object
+    path : str
+        The path to the location to save the pickle file, support gcs paths
+    filesystem : blocks.filesystem.FileSystem or similar
+        A filesystem object that implements the blocks.FileSystem API
+    """
+    with filesystem.open(path, "wb") as f:
+        _pickle.dump(obj, f)
+
+
+def unpickle(path, filesystem=GCSNativeFileSystem()):
+    """ Load an object from the pickle file at path
+
+    Parameters
+    ----------
+    obj : Object
+        Any pickle compatible object
+    path : str
+        The path to the location of the saved pickle file, support gcs paths
+    filesystem : blocks.filesystem.FileSystem or similar
+        A filesystem object that implements the blocks.FileSystem API
+    """
+    with filesystem.open(path, "rb") as f:
+        return _pickle.load(f)
 
 
 def _collect(path, cgroups, rgroups, filesystem):
