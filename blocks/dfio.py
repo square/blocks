@@ -52,7 +52,9 @@ def read_df(datafile, **read_args):
         defaults = {"lines": True, "orient": "records"}
         defaults.update(read_args)
         read_args = defaults
-    return reader(datafile.handle, **read_args)
+
+    with datafile.handle("rb") as f:
+        return reader(f, **read_args)
 
 
 def write_df(df, datafile, **write_args):
@@ -80,48 +82,51 @@ def write_df(df, datafile, **write_args):
     write_name = _writers[extension]
     # infer compression from filepath or from explicit arg
     compression = compression or write_args.get("compression")
-    buffer = datafile.handle
+    with datafile.handle("wb") as buf:
+        # Some customizations for different file types
+        if write_name == "to_avro":
+            return _write_avro(df, buf, **write_args)
 
-    # Some customizations for different file types
-    if write_name == "to_avro":
-        return _write_avro(df, buffer, **write_args)
+        if (
+            write_name == "to_parquet"
+            and not pd.Series(df.columns).map(type).eq(str).all()
+        ):
+            warnings.warn(
+                "Dataframe contains non-string column names, which cannot be saved in parquet.\n"
+                "Blocks will attempt to convert them to strings."
+            )
+            df.columns = df.columns.astype("str")
 
-    if write_name == "to_parquet" and not pd.Series(df.columns).map(type).eq(str).all():
-        warnings.warn(
-            "Dataframe contains non-string column names, which cannot be saved in parquet.\n"
-            "Blocks will attempt to convert them to strings."
-        )
-        df.columns = df.columns.astype("str")
+        if write_name == "to_json":
+            defaults = {"lines": True, "orient": "records"}
+            defaults.update(write_args)
+            write_args = defaults
 
-    if write_name == "to_json":
-        defaults = {"lines": True, "orient": "records"}
-        defaults.update(write_args)
-        write_args = defaults
+        if write_name == "to_csv":
+            # make index=False the default for similar behaviour to other formats
+            write_args["index"] = write_args.get("index", False)
 
-    if write_name == "to_csv":
-        # make index=False the default for similar behaviour to other formats
-        write_args["index"] = write_args.get("index", False)
+        # For csv and pickle we have to manually compress
+        manual_compress = write_name in ("to_csv", "to_pickle", "to_json")
+        if manual_compress:
+            write_args[
+                "compression"
+            ] = None  # default "infer" incompatible with handles as of 0.24
 
-    # For csv and pickle we have to manually compress
-    manual_compress = write_name in ("to_csv", "to_pickle", "to_json")
-    if manual_compress:
-        write_args[
-            "compression"
-        ] = None  # default "infer" incompatible with handles as of 0.24
+        if manual_compress and compression == "gzip":
+            buf = gzip.GzipFile(fileobj=buf, mode="w")
+        elif manual_compress and compression is not None:
+            raise ValueError(
+                "Compression {} is not supported for CSV/Pickle".format(compression)
+            )
 
-    if manual_compress and compression == "gzip":
-        buffer = gzip.GzipFile(fileobj=buffer, mode="w")
-    elif manual_compress and compression is not None:
-        raise ValueError(
-            "Compression {} is not supported for CSV/Pickle".format(compression)
-        )
+        # And for 23 compatibility need a textiowrapper for text formats
+        if write_name in ("to_csv", "to_json") and six.PY3:
+            buf = TextIOWrapper(buf)
 
-    # And for 23 compatibility need a textiowrapper for text formats
-    if write_name in ("to_csv", "to_json") and six.PY3:
-        buffer = TextIOWrapper(buffer)
-
-    write_fn = getattr(df, write_name)
-    return write_fn(buffer, **write_args)
+        write_fn = getattr(df, write_name)
+        write_fn(buf, **write_args)
+        buf.close()
 
 
 def _read_avro(handle, **read_args):
