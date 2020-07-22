@@ -1,3 +1,9 @@
+## [0.7.1] - 2020-08-20
+
+### Added
+
+`blocks.pickle` and `blocks.unpickle` utilities to save and load pickle files.
+
 ## [0.7.0] - 2020-07-22
 
 This release has minor backwards incompatible for anyone that directly used
