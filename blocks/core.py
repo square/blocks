@@ -10,8 +10,15 @@ from blocks.dfio import read_df, write_df
 from blocks.filesystem import GCSFileSystem
 
 
-def assemble(path, cgroups=None, rgroups=None,
-             read_args={}, cgroup_args={}, merge='inner', filesystem=GCSFileSystem()):
+def assemble(
+    path,
+    cgroups=None,
+    rgroups=None,
+    read_args={},
+    cgroup_args={},
+    merge="inner",
+    filesystem=GCSFileSystem(),
+):
     """ Assemble multiple dataframe blocks into a single frame
 
     Each file included in the path (or subdirs of that path) is combined into
@@ -69,15 +76,23 @@ def assemble(path, cgroups=None, rgroups=None,
     # Delete temporary files
     # ----------------------------------------
     for file in datafiles:
-        if hasattr(file.handle, 'name'):
+        if hasattr(file.handle, "name"):
             tmp_file_path = file.handle.name
             if os.path.exists(tmp_file_path):
                 os.remove(file.handle.name)
     return df
 
 
-def iterate(path, axis=-1, cgroups=None, rgroups=None,
-            read_args={}, cgroup_args={}, merge='inner', filesystem=GCSFileSystem()):
+def iterate(
+    path,
+    axis=-1,
+    cgroups=None,
+    rgroups=None,
+    read_args={},
+    cgroup_args={},
+    merge="inner",
+    filesystem=GCSFileSystem(),
+):
     """ Iterate over dataframe blocks
 
     Each file include in the path (or subdirs of that path) is opened as a
@@ -125,7 +140,9 @@ def iterate(path, axis=-1, cgroups=None, rgroups=None,
             if cgroup in cgroup_args:
                 args.update(cgroup_args[cgroup])
             for datafile in grouped[cgroup]:
-                yield _cname(datafile.path), _rname(datafile.path), read_df(datafile, **args)
+                yield _cname(datafile.path), _rname(datafile.path), read_df(
+                    datafile, **args
+                )
 
     elif axis == 0:
         # find the shared files among all subfolders
@@ -135,8 +152,7 @@ def iterate(path, axis=-1, cgroups=None, rgroups=None,
             frames = []
             for cgroup in grouped:
                 datafile = next(
-                    d for d in grouped[cgroup]
-                    if os.path.basename(d.path) == rgroup
+                    d for d in grouped[cgroup] if os.path.basename(d.path) == rgroup
                 )
 
                 args = read_args.copy()
@@ -154,11 +170,18 @@ def iterate(path, axis=-1, cgroups=None, rgroups=None,
             yield cgroup, pd.concat(read_df(d, **args) for d in datafiles)
 
     else:
-        raise ValueError('Invalid choice for axis, options are -1, 0, 1')
+        raise ValueError("Invalid choice for axis, options are -1, 0, 1")
 
 
-def partitioned(path, cgroups=None, rgroups=None,
-                read_args={}, cgroup_args={}, merge='inner', filesystem=GCSFileSystem()):
+def partitioned(
+    path,
+    cgroups=None,
+    rgroups=None,
+    read_args={},
+    cgroup_args={},
+    merge="inner",
+    filesystem=GCSFileSystem(),
+):
     """ Return a partitioned dask dataframe, where each partition is a row group
 
     The results are the same as iterate with axis=0, except that it returns a dask dataframe
@@ -194,7 +217,7 @@ def partitioned(path, cgroups=None, rgroups=None,
         import dask
         import dask.dataframe as dd
     except ImportError:
-        raise ImportError('Partitioned requires dask[dataframe] to be installed')
+        raise ImportError("Partitioned requires dask[dataframe] to be installed")
 
     grouped = _collect(path, cgroups, rgroups, filesystem)
     blocks = []
@@ -204,13 +227,12 @@ def partitioned(path, cgroups=None, rgroups=None,
         frames = []
         for cgroup in grouped:
             datafile = next(
-                d for d in grouped[cgroup]
-                if os.path.basename(d.path) == rgroup
+                d for d in grouped[cgroup] if os.path.basename(d.path) == rgroup
             )
             args = read_args.copy()
             if cgroup in cgroup_args:
                 args.update(cgroup_args[cgroup])
-            frames.append(read_df(datafile,  **args))
+            frames.append(read_df(datafile, **args))
         return _merge_all(frames, merge=merge)
 
     for rgroup in _shared_rgroups(grouped):
@@ -239,15 +261,16 @@ def place(df, path, filesystem=GCSFileSystem(), **write_args):
 
 
 def divide(
-        df, path,
-        n_rgroup=1,
-        rgroup_offset=0,
-        cgroup_columns=None,
-        extension='.pq',
-        convert=False,
-        filesystem=GCSFileSystem(),
-        prefix=None,
-        **write_args
+    df,
+    path,
+    n_rgroup=1,
+    rgroup_offset=0,
+    cgroup_columns=None,
+    extension=".pq",
+    convert=False,
+    filesystem=GCSFileSystem(),
+    prefix=None,
+    **write_args
 ):
     """ Split a dataframe into rgroups/cgroups and save to disk
 
@@ -286,20 +309,23 @@ def divide(
         cgroup_columns = {None: df.columns}
 
     # Add leading dot if not in extension
-    if extension[0] != '.':
-        extension = '.'+extension
+    if extension[0] != ".":
+        extension = "." + extension
 
     if convert:
         for col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='ignore')
+            df[col] = pd.to_numeric(df[col], errors="ignore")
 
     for cname, columns in cgroup_columns.items():
         cgroup = df[columns]
 
         bucket = os.path.join(path, cname) if cname else path
-        rnames = ['part_{:05d}{}'.format(i+rgroup_offset, extension) for i in range(n_rgroup)]
+        rnames = [
+            "part_{:05d}{}".format(i + rgroup_offset, extension)
+            for i in range(n_rgroup)
+        ]
         if prefix is not None:
-            rnames = [prefix + '_' + rn for rn in rnames]
+            rnames = [prefix + "_" + rn for rn in rnames]
         with filesystem.store(bucket, rnames) as datafiles:
             for rgroup, d in zip(np.array_split(cgroup, n_rgroup), datafiles):
                 write_df(rgroup.reset_index(drop=True), d, **write_args)
@@ -332,7 +358,7 @@ def _collect(path, cgroups, rgroups, filesystem):
     # ----------------------------------------
     paths = filesystem.ls(path)
     if not paths:
-        raise ValueError('Did not find any files at the path: {}'.format(path))
+        raise ValueError("Did not find any files at the path: {}".format(path))
     expanded = _expand(paths, filesystem)
     filtered = _filter(expanded, cgroups, rgroups)
     grouped = _cgroups(filtered)
@@ -346,7 +372,7 @@ def _collect(path, cgroups, rgroups, filesystem):
 
 
 def _has_ext(path):
-    return os.path.splitext(path)[1] != ''
+    return os.path.splitext(path)[1] != ""
 
 
 def _expand(paths, filesystem):
@@ -359,7 +385,7 @@ def _expand(paths, filesystem):
             expanded.append(path)
         else:
             # Otherwise try to read it like a directory
-            expanded += filesystem.ls(os.path.join(path, '**'))
+            expanded += filesystem.ls(os.path.join(path, "**"))
     return [p for p in expanded if _has_ext(p)]
 
 
@@ -368,8 +394,8 @@ def _filter(paths, cgroups, rgroups):
     """
     kept = []
     for path in paths:
-        valid_cgroup = (cgroups is None or _cname(path) in cgroups)
-        valid_rgroup = (rgroups is None or _rname(path) in rgroups)
+        valid_cgroup = cgroups is None or _cname(path) in cgroups
+        valid_rgroup = rgroups is None or _rname(path) in rgroups
         if valid_cgroup and valid_rgroup:
             kept.append(path)
     return kept
@@ -411,16 +437,18 @@ def _access(cgroups, filesystem):
     return updated
 
 
-def _safe_merge(df1, df2, merge='inner'):
+def _safe_merge(df1, df2, merge="inner"):
     """ Merge two dataframes, warning of any shape differences
     """
     s1, s2 = df1.shape[0], df2.shape[0]
     if s1 != s2:
-        warnings.warn('The two cgroups have a different number of rows: {} {}'.format(s1, s2))
+        warnings.warn(
+            "The two cgroups have a different number of rows: {} {}".format(s1, s2)
+        )
     return pd.merge(df1, df2, how=merge)
 
 
-def _merge_all(frames, merge='inner'):
+def _merge_all(frames, merge="inner"):
     """ Merge a list of dataframes with safe merge
     """
     result = frames[0]
@@ -430,8 +458,5 @@ def _merge_all(frames, merge='inner'):
 
 
 def _shared_rgroups(grouped):
-    rgroups = [
-        [_rname(d.path) for d in group]
-        for group in grouped.values()
-    ]
+    rgroups = [[_rname(d.path) for d in group] for group in grouped.values()]
     return reduce(lambda a, b: set(a) & set(b), rgroups)

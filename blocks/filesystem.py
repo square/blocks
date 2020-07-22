@@ -16,20 +16,27 @@ from collections import namedtuple
 from contextlib import contextmanager
 from google.cloud import storage
 
-DataFile = namedtuple('DataFile', ['path', 'handle'])
+DataFile = namedtuple("DataFile", ["path", "handle"])
 
 
 @wrapt.decorator
 def _retry_with_backoff(wrapped, instance, args, kwargs):
     trial = 0
     while True:
-        wait = 2**(trial+2)  # 4s up to 128s
+        wait = 2 ** (trial + 2)  # 4s up to 128s
         try:
             return wrapped(*args, **kwargs)
-        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+        ):
             if trial == 6:
                 raise
-            logging.info('{} failed to connect, retrying after {}s'.format(wrapped.__name__, wait))
+            logging.info(
+                "{} failed to connect, retrying after {}s".format(
+                    wrapped.__name__, wait
+                )
+            )
             trial += 1
         time.sleep(wait)
 
@@ -41,6 +48,7 @@ class FileSystem(object):
     See GCSFileSystem for a full implementation. This FileSystem is intended
     to be extendable to support cloud file systems, encryption strategies, etc...
     """
+
     @abstractmethod
     def ls(self, path):
         """ List files correspond to path, including glob wildcards
@@ -99,15 +107,16 @@ class GCSFileSystem(FileSystem):
     However this can lead to problems in very multi-threaded applications and might not be
     as portable. For a python native implementation use GCSNativeFileSystem
     """
-    GCS = 'gs://'
+
+    GCS = "gs://"
 
     def __init__(self, parallel=True, quiet=True):
         flags = []
         if parallel:
-            flags.append('-m')
+            flags.append("-m")
         if quiet:
-            flags.append('-q')
-        self.gcscp = ['gsutil'] + flags + ['cp']
+            flags.append("-q")
+        self.gcscp = ["gsutil"] + flags + ["cp"]
 
     def local(self, path):
         """ Check if the path is available as a local file
@@ -122,20 +131,20 @@ class GCSFileSystem(FileSystem):
         path : str
             The path to the file or directory to list; supports wildcards
         """
-        logging.info('Globbing file content in {}'.format(path))
+        logging.info("Globbing file content in {}".format(path))
         if not self.local(path):
-            with open(os.devnull, 'w') as DEVNULL:
+            with open(os.devnull, "w") as DEVNULL:
                 p = subprocess.Popen(
-                    ['gsutil', 'ls', path],
+                    ["gsutil", "ls", path],
                     stdout=subprocess.PIPE,
                     stderr=DEVNULL,
                     universal_newlines=True,
                 )
                 stdout = p.communicate()[0]
-            output = [line for line in stdout.split('\n') if line and line[-1] != ':']
-        elif '**' in path:
+            output = [line for line in stdout.split("\n") if line and line[-1] != ":"]
+        elif "**" in path:
             # Manual recursive glob, since in 2.X glob doesn't have recursive support
-            path = path.rstrip('*')
+            path = path.rstrip("*")
             output = []
             for root, subdirs, files in os.walk(path):
                 for fname in files:
@@ -144,7 +153,7 @@ class GCSFileSystem(FileSystem):
             output = [os.path.join(path, f) for f in os.listdir(path)]
         else:
             output = glob.glob(path)
-        return sorted(p.rstrip('/') for p in output)
+        return sorted(p.rstrip("/") for p in output)
 
     def rm(self, paths, recursive=False):
         """ Remove the files at paths
@@ -161,16 +170,18 @@ class GCSFileSystem(FileSystem):
 
         if any(not self.local(p) for p in paths):
             # at least one location is on GCS
-            cmd = ['gsutil', '-m', 'rm']
+            cmd = ["gsutil", "-m", "rm"]
 
         else:
-            cmd = ['rm']
+            cmd = ["rm"]
 
         if recursive:
-            cmd.append('-r')
+            cmd.append("-r")
 
         CHUNK_SIZE = 1000
-        paths_chunks = [paths[x:x+CHUNK_SIZE] for x in range(0, len(paths), CHUNK_SIZE)]
+        paths_chunks = [
+            paths[x : x + CHUNK_SIZE] for x in range(0, len(paths), CHUNK_SIZE)
+        ]
         for paths in paths_chunks:
             subprocess.check_call(cmd + paths)
 
@@ -189,25 +200,27 @@ class GCSFileSystem(FileSystem):
         if isinstance(sources, string_types):
             sources = [sources]
 
-        summary = ', '.join(sources)
-        logging.info('Copying {} to {}...'.format(summary, dest))
+        summary = ", ".join(sources)
+        logging.info("Copying {} to {}...".format(summary, dest))
 
         if any(self.GCS in x for x in sources + [dest]):
             # at least one location is on GCS
             cmd = self.gcscp
         else:
-            cmd = ['cp']
+            cmd = ["cp"]
 
         if recursive:
-            cmd.append('-r')
+            cmd.append("-r")
 
         CHUNK_SIZE = 1000
-        sources_chunks = [sources[x:x+CHUNK_SIZE] for x in range(0, len(sources), CHUNK_SIZE)]
+        sources_chunks = [
+            sources[x : x + CHUNK_SIZE] for x in range(0, len(sources), CHUNK_SIZE)
+        ]
         for sources in sources_chunks:
             subprocess.check_call(cmd + sources + [dest])
 
     @contextmanager
-    def open(self, path, mode='rb'):
+    def open(self, path, mode="rb"):
         """ Access path as a file-like object
 
         Parameters
@@ -223,7 +236,7 @@ class GCSFileSystem(FileSystem):
             A python file opened to the provided path (uses a local temporary copy that is removed)
         """
         with tempfile.NamedTemporaryFile() as nf:
-            if mode.startswith('r'):
+            if mode.startswith("r"):
                 self.cp(path, nf.name)
 
             nf.seek(0)
@@ -233,7 +246,7 @@ class GCSFileSystem(FileSystem):
 
             nf.seek(0)
 
-            if mode.startswith('w'):
+            if mode.startswith("w"):
                 self.cp(nf.name, path)
 
     def access(self, paths):
@@ -259,7 +272,7 @@ class GCSFileSystem(FileSystem):
         datafiles = []
         for path in paths:
             local = os.path.join(tmpdir, os.path.basename(path))
-            datafiles.append(DataFile(path, open(local, 'rb')))
+            datafiles.append(DataFile(path, open(local, "rb")))
         return datafiles
 
     @contextmanager
@@ -294,7 +307,7 @@ class GCSFileSystem(FileSystem):
         for f in files:
             local = os.path.join(tmpdir, f)
             local_files.append(local)
-            datafiles.append(DataFile(os.path.join(bucket, f), open(local, 'wb')))
+            datafiles.append(DataFile(os.path.join(bucket, f), open(local, "wb")))
 
         yield datafiles
 
@@ -304,7 +317,7 @@ class GCSFileSystem(FileSystem):
         if self.local(bucket) and not os.path.exists(bucket):
             os.makedirs(bucket)
 
-        self.cp(local_files, os.path.join(bucket, ''), recursive=True)
+        self.cp(local_files, os.path.join(bucket, ""), recursive=True)
 
 
 class GCSNativeFileSystem(GCSFileSystem):
@@ -315,6 +328,7 @@ class GCSNativeFileSystem(GCSFileSystem):
     copy), but is thread-safe for applications which are already parallelized. It stores the files
     entirely in memory rather than using tempfiles.
     """
+
     def __init__(self, *args, **kwargs):
         self._client = None
         super(GCSNativeFileSystem, self).__init__(*args, **kwargs)
@@ -328,7 +342,7 @@ class GCSNativeFileSystem(GCSFileSystem):
     def ls(self, path):
         """ List all files at the specified path, supports globbing
         """
-        logging.info('Globbing file content in {}'.format(path))
+        logging.info("Globbing file content in {}".format(path))
 
         # use GCSFileSystem's implementation for local paths
         if self.local(path):
@@ -340,33 +354,33 @@ class GCSNativeFileSystem(GCSFileSystem):
 
         if prefix == path:
             # no pattern matching
-            iterator = self._list_blobs(bucket, prefix=prefix, delimiter='/')
+            iterator = self._list_blobs(bucket, prefix=prefix, delimiter="/")
             names = [b.name for b in iterator]
             names += iterator.prefixes
             # if we ran ls('gs://bucket/dir') we need to rerun with '/' to get the content
-            if names == [os.path.join(path, '')]:
-                return self.ls(os.path.join('gs://' + bucket, path, ''))
+            if names == [os.path.join(path, "")]:
+                return self.ls(os.path.join("gs://" + bucket, path, ""))
         else:
             # we have a pattern to match
             names = [b.name for b in self._list_blobs(bucket, prefix=prefix)]
             # for recursive glob, do not attempt to match folders, only files
-            if '**' in path:
+            if "**" in path:
                 names = fnmatch.filter(names, path)
             else:
                 # make sure we can match folders in addition to blobs
                 candidates = set(names) | set(self._list_single(prefix, names))
                 names = fnmatch.filter(candidates, path)
                 # one more filter because fnmatch recurses single *
-                names = [name for name in names if name.count('/') == path.count('/')]
+                names = [name for name in names if name.count("/") == path.count("/")]
 
-        paths = ['gs://{}/{}'.format(bucket, name) for name in names]
-        return sorted(p.rstrip('/') for p in paths)
+        paths = ["gs://{}/{}".format(bucket, name) for name in names]
+        return sorted(p.rstrip("/") for p in paths)
 
     def is_dir(self, path):
         # Check if a path is a directory, locally or on GCS
         if self.local(path):
             return os.path.isdir(path)
-        elif path.endswith('/'):
+        elif path.endswith("/"):
             return True
         else:
             return self.ls(path) != [path]
@@ -384,12 +398,12 @@ class GCSNativeFileSystem(GCSFileSystem):
             self._blob(source).download_to_filename(dest)
 
         if local_source and not local_dest:
-            if dest.endswith('/'):
+            if dest.endswith("/"):
                 dest = os.path.join(dest, os.path.basename(source))
             self._blob(dest).upload_from_filename(source)
 
         if not local_source and not local_dest:
-            if dest.endswith('/'):
+            if dest.endswith("/"):
                 dest = os.path.join(dest, os.path.basename(source))
             self._transfer(source, dest)
 
@@ -413,8 +427,8 @@ class GCSNativeFileSystem(GCSFileSystem):
                 # Note: if source ends with a '/', this copies the content into dest
                 #   and if source does not, this copies the whole directory into dest
                 #   this is the same behavior as copy
-                subsource = [s.rstrip('/') for s in self.ls(source)]
-                subdest = os.path.join(dest, os.path.basename(source), '')
+                subsource = [s.rstrip("/") for s in self.ls(source)]
+                subdest = os.path.join(dest, os.path.basename(source), "")
                 if self.local(subdest) and not os.path.exists(subdest):
                     os.makedirs(subdest)
                 self.cp(subsource, subdest, recursive=True)
@@ -449,7 +463,7 @@ class GCSNativeFileSystem(GCSFileSystem):
                 self.rm_single(path)
 
     @contextmanager
-    def open(self, path, mode='rb'):
+    def open(self, path, mode="rb"):
         """ Access paths as a file-like object
 
         Parameters
@@ -465,16 +479,16 @@ class GCSNativeFileSystem(GCSFileSystem):
             A BytesIO handle for the specified path, works like a file object
         """
         datafile = DataFile(path, BytesIO())
-        if mode.startswith('r'):
+        if mode.startswith("r"):
             self._read(datafile)
-        if not mode.endswith('b') and PY3:
+        if not mode.endswith("b") and PY3:
             handle = TextIOWrapper(datafile.handle)
         else:
             handle = datafile.handle
 
         yield handle
 
-        if mode.startswith('w'):
+        if mode.startswith("w"):
             handle.seek(0)
             self._write(datafile)
         datafile.handle.close()
@@ -539,29 +553,33 @@ class GCSNativeFileSystem(GCSFileSystem):
 
     def _prefix(self, path):
         # find the lowest prefix that doesn't include a pattern match
-        splits = path.split('/')
+        splits = path.split("/")
         accumulate = []
         while splits:
             sub = splits.pop(0)
-            if any(x in sub for x in ['*', '?', '[', ']']):
+            if any(x in sub for x in ["*", "?", "[", "]"]):
                 break
             accumulate.append(sub)
-        return '/'.join(accumulate) if accumulate else None
+        return "/".join(accumulate) if accumulate else None
 
     def _list_single(self, prefix, names):
         # find files that are directly in the dir specified by prefix, not in subfolders
-        valid = set(n.replace(prefix, '').lstrip('/').split('/')[0] for n in names)
+        valid = set(n.replace(prefix, "").lstrip("/").split("/")[0] for n in names)
         return [os.path.join(prefix, n) for n in valid]
 
     def _split(self, path):
-        bucket = path.replace(self.GCS, '').split('/')[0]
+        bucket = path.replace(self.GCS, "").split("/")[0]
         prefix = "gs://{}".format(bucket)
-        path = path[len(prefix) + 1:]
+        path = path[len(prefix) + 1 :]
         return bucket, path
 
     @_retry_with_backoff
     def _list_blobs(self, bucket, prefix=None, delimiter=None):
-        return self.client().get_bucket(bucket).list_blobs(prefix=prefix, delimiter=delimiter)
+        return (
+            self.client()
+            .get_bucket(bucket)
+            .list_blobs(prefix=prefix, delimiter=delimiter)
+        )
 
     @_retry_with_backoff
     def _blob(self, path):
@@ -580,7 +598,7 @@ class GCSNativeFileSystem(GCSFileSystem):
     @_retry_with_backoff
     def _read(self, datafile):
         if self.local(datafile.path):
-            with open(datafile.path, 'rb') as f:
+            with open(datafile.path, "rb") as f:
                 datafile.handle.write(f.read())
         else:
             self._blob(datafile.path).download_to_file(datafile.handle)
@@ -594,7 +612,7 @@ class GCSNativeFileSystem(GCSFileSystem):
             if not os.path.isdir(dirname):
                 os.makedirs(dirname)
 
-            with open(datafile.path, 'wb') as f:
+            with open(datafile.path, "wb") as f:
                 f.write(datafile.handle.read())
         else:
             self._blob(datafile.path).upload_from_file(datafile.handle)
