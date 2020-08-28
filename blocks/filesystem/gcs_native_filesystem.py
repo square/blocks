@@ -33,8 +33,6 @@ class GCSNativeDataFile(DataFile):
 
         yield buf
 
-        buf.seek(0)
-
         if mode.startswith("w"):
             self.filesystem._write(self.path, bytesio)
 
@@ -331,5 +329,12 @@ class GCSNativeFileSystem(GCSFileSystem):
 
     @_retry_with_backoff
     def _write(self, path, bytesio):
-        bytesio.seek(0)
+        try:
+            bytesio.seek(0)
+        except ValueError:
+            raise ValueError(
+                "The pandas function that attempted to write this file cleared the memory before blocks"
+                " could write it, this is a known issue with an upcoming fix. Try a non-pickle file type"
+                " or the default filesystem."
+            )
         self._blob(path).upload_from_file(bytesio)

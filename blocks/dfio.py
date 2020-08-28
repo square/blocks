@@ -122,11 +122,10 @@ def write_df(df, datafile, **write_args):
 
         # And for 23 compatibility need a textiowrapper for text formats
         if write_name in ("to_csv", "to_json") and six.PY3:
-            buf = TextIOWrapper(buf)
+            buf = TextIOWrapper(buf, write_through=True)
 
         write_fn = getattr(df, write_name)
         write_fn(buf, **write_args)
-        buf.close()
 
 
 def _read_avro(handle, **read_args):

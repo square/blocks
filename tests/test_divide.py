@@ -3,15 +3,15 @@ import blocks
 
 
 def test_divide(datadir, randomdata, fs):
-    blocks.divide(randomdata, datadir, 10, extension=".pkl")
+    blocks.divide(randomdata, datadir, 10, extension=".csv", filesystem=fs)
     assert len(fs.ls(datadir)) == 10
     df = blocks.assemble(datadir)
     assert np.isclose(df, randomdata).all().all()
 
 
 def test_divide_offset(datadir, randomdata, fs):
-    blocks.divide(randomdata, datadir, 10, extension=".pkl")
-    blocks.divide(randomdata, datadir, 10, 10, extension=".pkl")
+    blocks.divide(randomdata, datadir, 10, extension=".csv", filesystem=fs)
+    blocks.divide(randomdata, datadir, 10, 10, extension=".csv", filesystem=fs)
     assert len(fs.ls(datadir)) == 20
     df = blocks.assemble(datadir)
     expected = randomdata.append(randomdata)
@@ -27,7 +27,12 @@ def test_divide_cgroups(datadir, randomdata, fs):
     }
 
     blocks.divide(
-        randomdata, datadir, 10, cgroup_columns=cgroups_columns, extension=".pkl"
+        randomdata,
+        datadir,
+        10,
+        cgroup_columns=cgroups_columns,
+        extension=".csv",
+        filesystem=fs,
     )
     assert len(fs.ls(datadir)) == 3
     for subdir in fs.ls(datadir):

@@ -3,17 +3,17 @@
 from blocks import core
 
 
-def test_assemble(populated):
-    df = core.assemble(populated)
+def test_assemble(populated, fs):
+    df = core.assemble(populated, filesystem=fs)
     assert df.shape == (40, 41)
     expected = ["f{}_{}".format(i, j) for i in range(4) for j in range(10)]
     expected.append("key")
     assert set(df.columns) == set(expected)
 
 
-def test_assemble_ordered(populated):
+def test_assemble_ordered(populated, fs):
     order = ["c2", "c1", "c3", "c0"]
-    df = core.assemble(populated, cgroups=order)
+    df = core.assemble(populated, cgroups=order, filesystem=fs)
     assert df.shape == (40, 41)
     expected = ["f{}_{}".format(order[i][1], j) for i in range(4) for j in range(10)]
     expected.append("key")
