@@ -3,7 +3,6 @@ import os
 import pandas as pd
 import numpy as np
 import pytest
-import six
 import blocks.dfio as io
 from blocks.datafile import LocalDataFile
 
@@ -85,12 +84,7 @@ def test_read_write_parquet_unicode(randomdata, datadir_local):
     pytest.importorskip("pandas", minversion="0.22.0")
     randomdata[u"f10"] = randomdata["f9"]
     path = os.path.join(datadir_local, "tmp{}".format(".pq"))
-    if six.PY2:
-        # expect a warning about this in python2
-        with pytest.warns(UserWarning):
-            df = _reload(randomdata, path)
-    else:
-        df = _reload(randomdata, path)
+    df = _reload(randomdata, path)
     assert np.isclose(df, randomdata).all().all()
 
 

@@ -7,7 +7,7 @@ with open("README.md") as readme_file:
     readme = readme_file.read()
 
 requirements = [
-    "six",
+    "six==1.14.0",
     "wrapt",
     "pandas",
     "google-cloud-storage",

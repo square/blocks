@@ -7,20 +7,37 @@ import pickle as _pickle
 
 from functools import reduce
 from collections import defaultdict, OrderedDict
+from typing import (
+    Optional,
+    Sequence,
+    Any,
+    Dict,
+    Iterator,
+    Tuple,
+    DefaultDict,
+    List,
+    Iterable,
+    Union,
+)
+
 from blocks.dfio import read_df, write_df
-from blocks.filesystem import GCSFileSystem, GCSNativeFileSystem
+from blocks.filesystem import GCSFileSystem, GCSNativeFileSystem, FileSystem
+from blocks.datafile import DataFile
+
+cgroup = str
+rgroup = str
 
 
 def assemble(
-    path,
-    cgroups=None,
-    rgroups=None,
-    read_args={},
-    cgroup_args={},
-    merge="inner",
-    filesystem=GCSFileSystem(),
-):
-    """ Assemble multiple dataframe blocks into a single frame
+    path: str,
+    cgroups: Optional[Sequence[cgroup]] = None,
+    rgroups: Optional[Sequence[rgroup]] = None,
+    read_args: Any = {},
+    cgroup_args: Dict[cgroup, Any] = {},
+    merge: str = "inner",
+    filesystem: FileSystem = GCSFileSystem(),
+) -> pd.DataFrame:
+    """Assemble multiple dataframe blocks into a single frame
 
     Each file included in the path (or subdirs of that path) is combined into
     a single dataframe by first concatenating over row groups and then merging
@@ -85,16 +102,18 @@ def assemble(
 
 
 def iterate(
-    path,
-    axis=-1,
-    cgroups=None,
-    rgroups=None,
-    read_args={},
-    cgroup_args={},
-    merge="inner",
-    filesystem=GCSFileSystem(),
-):
-    """ Iterate over dataframe blocks
+    path: str,
+    axis: int = -1,
+    cgroups: Optional[Sequence[cgroup]] = None,
+    rgroups: Optional[Sequence[rgroup]] = None,
+    read_args: Any = {},
+    cgroup_args: Dict[cgroup, Any] = {},
+    merge: str = "inner",
+    filesystem: FileSystem = GCSFileSystem(),
+) -> Union[
+    Iterator[Tuple[cgroup, rgroup, pd.DataFrame]], Iterator[Tuple[str, pd.DataFrame]]
+]:
+    """Iterate over dataframe blocks
 
     Each file include in the path (or subdirs of that path) is opened as a
     dataframe and returned in a generator of (cname, rname, dataframe).
@@ -175,15 +194,15 @@ def iterate(
 
 
 def partitioned(
-    path,
-    cgroups=None,
-    rgroups=None,
-    read_args={},
-    cgroup_args={},
-    merge="inner",
-    filesystem=GCSFileSystem(),
+    path: str,
+    cgroups: Sequence[cgroup] = None,
+    rgroups: Sequence[rgroup] = None,
+    read_args: Any = {},
+    cgroup_args: Dict[cgroup, Any] = {},
+    merge: str = "inner",
+    filesystem: FileSystem = GCSFileSystem(),
 ):
-    """ Return a partitioned dask dataframe, where each partition is a row group
+    """Return a partitioned dask dataframe, where each partition is a row group
 
     The results are the same as iterate with axis=0, except that it returns a dask dataframe
     instead of a generator. Note that this requires dask to be installed
@@ -241,8 +260,10 @@ def partitioned(
     return dd.from_delayed(blocks)
 
 
-def place(df, path, filesystem=GCSFileSystem(), **write_args):
-    """ Place a dataframe block onto the filesystem at the specified path
+def place(
+    df: pd.DataFrame, path: str, filesystem: FileSystem = GCSFileSystem(), **write_args
+) -> None:
+    """Place a dataframe block onto the filesystem at the specified path
 
     Parameters
     ----------
@@ -262,18 +283,18 @@ def place(df, path, filesystem=GCSFileSystem(), **write_args):
 
 
 def divide(
-    df,
-    path,
-    n_rgroup=1,
-    rgroup_offset=0,
-    cgroup_columns=None,
-    extension=".pq",
-    convert=False,
-    filesystem=GCSFileSystem(),
+    df: pd.DataFrame,
+    path: str,
+    n_rgroup: int = 1,
+    rgroup_offset: int = 0,
+    cgroup_columns: Optional[Dict[Optional[cgroup], Sequence[str]]] = None,
+    extension: str = ".pq",
+    convert: bool = False,
+    filesystem: FileSystem = GCSFileSystem(),
     prefix=None,
-    **write_args
-):
-    """ Split a dataframe into rgroups/cgroups and save to disk
+    **write_args,
+) -> None:
+    """Split a dataframe into rgroups/cgroups and save to disk
 
     Note that this splitting does not preserve the original index, so make sure
     to have another column to track values
@@ -301,6 +322,8 @@ def divide(
         object columns but requires additional time
     filesystem : blocks.filesystem.FileSystem or similar
         A filesystem object that implements the blocks.FileSystem API
+    prefix: str
+        Prefix to add to written filenames
     write_args : dict
         Any additional args to pass to the write function
 
@@ -332,8 +355,8 @@ def divide(
                 write_df(rgroup.reset_index(drop=True), d, **write_args)
 
 
-def pickle(obj, path, filesystem=GCSNativeFileSystem()):
-    """ Save a pickle of obj at the specified path
+def pickle(obj: Any, path: str, filesystem: FileSystem = GCSNativeFileSystem()):
+    """Save a pickle of obj at the specified path
 
     Parameters
     ----------
@@ -348,8 +371,8 @@ def pickle(obj, path, filesystem=GCSNativeFileSystem()):
         _pickle.dump(obj, f)
 
 
-def unpickle(path, filesystem=GCSNativeFileSystem()):
-    """ Load an object from the pickle file at path
+def unpickle(path: str, filesystem: FileSystem = GCSNativeFileSystem()):
+    """Load an object from the pickle file at path
 
     Parameters
     ----------
@@ -364,8 +387,13 @@ def unpickle(path, filesystem=GCSNativeFileSystem()):
         return _pickle.load(f)
 
 
-def _collect(path, cgroups, rgroups, filesystem):
-    """ Collect paths into cgroups and download any gcs files for local access
+def _collect(
+    path: str,
+    cgroups: Optional[Sequence[cgroup]],
+    rgroups: Optional[Sequence[rgroup]],
+    filesystem: FileSystem,
+) -> Dict[cgroup, Sequence[DataFile]]:
+    """Collect paths into cgroups and download any gcs files for local access
 
     Parameters
     ----------
@@ -391,7 +419,7 @@ def _collect(path, cgroups, rgroups, filesystem):
     # ----------------------------------------
     paths = filesystem.ls(path)
     if not paths:
-        raise ValueError("Did not find any files at the path: {}".format(path))
+        raise ValueError(f"Did not find any files at the path: {path}")
     expanded = _expand(paths, filesystem)
     filtered = _filter(expanded, cgroups, rgroups)
     grouped = _cgroups(filtered)
@@ -404,13 +432,12 @@ def _collect(path, cgroups, rgroups, filesystem):
     return OrderedDict((k, accessed[k]) for k in cgroups)
 
 
-def _has_ext(path):
+def _has_ext(path: str) -> bool:
     return os.path.splitext(path)[1] != ""
 
 
-def _expand(paths, filesystem):
-    """ For any directories in paths, expand into all the contained files
-    """
+def _expand(paths: Sequence[str], filesystem: FileSystem) -> List[str]:
+    """For any directories in paths, expand into all the contained files"""
     expanded = []
     for path in paths:
         if _has_ext(path):
@@ -422,9 +449,12 @@ def _expand(paths, filesystem):
     return [p for p in expanded if _has_ext(p)]
 
 
-def _filter(paths, cgroups, rgroups):
-    """ Keep only paths with the appropriate cgroups and/or rgroups
-    """
+def _filter(
+    paths: Sequence[str],
+    cgroups: Optional[Sequence[cgroup]],
+    rgroups: Optional[Sequence[rgroup]],
+) -> List[str]:
+    """Keep only paths with the appropriate cgroups and/or rgroups"""
     kept = []
     for path in paths:
         valid_cgroup = cgroups is None or _cname(path) in cgroups
@@ -434,62 +464,55 @@ def _filter(paths, cgroups, rgroups):
     return kept
 
 
-def _base(path):
-    """ Get base from path (name of the top level folder)
-    """
+def _base(path: str) -> str:
+    """Get base from path (name of the top level folder)"""
     return os.path.dirname(os.path.dirname(path))
 
 
-def _cname(path):
-    """ Get cname from path (name of the parent folder)
-    """
+def _cname(path: str) -> cgroup:
+    """Get cname from path (name of the parent folder)"""
     return os.path.basename(os.path.dirname(path))
 
 
-def _rname(path):
-    """ Get cname from path (name of the file)
-    """
+def _rname(path: str) -> rgroup:
+    """Get cname from path (name of the file)"""
     return os.path.basename(path)
 
 
-def _cgroups(paths):
-    """ Group paths by cgroup (the parent folder)
-    """
+def _cgroups(paths: Sequence[str]) -> DefaultDict[cgroup, List[str]]:
+    """Group paths by cgroup (the parent folder)"""
     cgroups = defaultdict(list)
     for path in paths:
         cgroups[_cname(path)].append(path)
     return cgroups
 
 
-def _access(cgroups, filesystem):
-    """ Access potentially cloud stored files, preserving cgroups
-    """
+def _access(cgroups, filesystem: FileSystem) -> Dict[cgroup, List[DataFile]]:
+    """Access potentially cloud stored files, preserving cgroups"""
     updated = {}
     for cgroup, paths in cgroups.items():
         updated[cgroup] = filesystem.access(paths)
     return updated
 
 
-def _safe_merge(df1, df2, merge="inner"):
-    """ Merge two dataframes, warning of any shape differences
-    """
+def _safe_merge(df1: pd.DataFrame, df2: pd.DataFrame, merge="inner") -> pd.DataFrame:
+    """Merge two dataframes, warning of any shape differences"""
     s1, s2 = df1.shape[0], df2.shape[0]
     if s1 != s2:
         warnings.warn(
-            "The two cgroups have a different number of rows: {} {}".format(s1, s2)
+            f"The two cgroups have a different number of rows: {s1} versus {s2}"
         )
     return pd.merge(df1, df2, how=merge)
 
 
-def _merge_all(frames, merge="inner"):
-    """ Merge a list of dataframes with safe merge
-    """
+def _merge_all(frames: Sequence[pd.DataFrame], merge="inner") -> pd.DataFrame:
+    """Merge a list of dataframes with safe merge"""
     result = frames[0]
     for frame in frames[1:]:
         result = _safe_merge(result, frame, merge)
     return result
 
 
-def _shared_rgroups(grouped):
+def _shared_rgroups(grouped) -> Iterable[rgroup]:
     rgroups = [[_rname(d.path) for d in group] for group in grouped.values()]
     return reduce(lambda a, b: set(a) & set(b), rgroups)
