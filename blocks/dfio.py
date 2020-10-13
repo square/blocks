@@ -112,14 +112,13 @@ def write_df(df, datafile, **write_args):
                 "compression"
             ] = None  # default "infer" incompatible with handles as of 0.24
 
-        if manual_compress and compression == "gzip":
-            buf = gzip.GzipFile(fileobj=buf, mode="w")
-        elif manual_compress and compression is not None:
+        if manual_compress and compression is not None:
             raise ValueError(
-                "Compression {} is not supported for CSV/Pickle".format(compression)
+                "Compression {} is not supported for CSV/Pickle/JSON".format(
+                    compression
+                )
             )
 
-        # And for 23 compatibility need a textiowrapper for text formats
         if write_name in ("to_csv", "to_json"):
             buf = TextIOWrapper(buf, write_through=True)
 

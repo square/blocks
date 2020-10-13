@@ -8,7 +8,7 @@ from blocks.datafile import LocalDataFile
 
 
 def test_read_write_native_formats(randomdata, datadir_local):
-    extensions = [".pkl", ".csv", ".json", ".json.gz", ".pkl.gz", ".csv.gz"]
+    extensions = [".pkl", ".csv", ".json"]
     for extension in extensions:
         path = os.path.join(datadir_local, "tmp{}".format(extension))
         df = _reload(randomdata, path)
@@ -25,13 +25,6 @@ def test_compression_csv(randomdata, datadir_local):
     df = io.read_df(d)
     assert np.isclose(df, randomdata).all().all()
 
-    # write compressed with blocks
-    d = LocalDataFile(path, path)
-    io.write_df(randomdata, d)
-    # read compressed with pandas
-    df = pd.read_csv(path, compression="gzip")
-    assert np.isclose(df, randomdata).all().all()
-
 
 def test_compression_pickle(randomdata, datadir_local):
     path = os.path.join(datadir_local, "tmp.pkl.gz")
@@ -41,13 +34,6 @@ def test_compression_pickle(randomdata, datadir_local):
     # read compressed with blocks
     d = LocalDataFile(path, path)
     df = io.read_df(d)
-    assert np.isclose(df, randomdata).all().all()
-
-    # write compressed with blocks
-    d = LocalDataFile(path, path)
-    io.write_df(randomdata, d)
-    # read compressed with pandas
-    df = pd.read_pickle(path, compression="gzip")
     assert np.isclose(df, randomdata).all().all()
 
 
