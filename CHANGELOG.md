@@ -1,3 +1,15 @@
+## [0.8.0] - 2020-10-14
+
+### Removed
+
+- Dropped Python 2 support.
+- Compression on write no longer supported by Pandas
+
+### Added
+
+- Typehints for Python 3
+- some missing abstract methods to the base FileSystem class definition.
+
 ## [0.7.1] - 2020-08-20
 
 ### Added
