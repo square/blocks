@@ -3,13 +3,12 @@ import os
 import pandas as pd
 import numpy as np
 import pytest
-import six
 import blocks.dfio as io
 from blocks.datafile import LocalDataFile
 
 
 def test_read_write_native_formats(randomdata, datadir_local):
-    extensions = [".pkl", ".csv", ".json", ".json.gz", ".pkl.gz", ".csv.gz"]
+    extensions = [".pkl", ".csv", ".json"]
     for extension in extensions:
         path = os.path.join(datadir_local, "tmp{}".format(extension))
         df = _reload(randomdata, path)
@@ -26,13 +25,6 @@ def test_compression_csv(randomdata, datadir_local):
     df = io.read_df(d)
     assert np.isclose(df, randomdata).all().all()
 
-    # write compressed with blocks
-    d = LocalDataFile(path, path)
-    io.write_df(randomdata, d)
-    # read compressed with pandas
-    df = pd.read_csv(path, compression="gzip")
-    assert np.isclose(df, randomdata).all().all()
-
 
 def test_compression_pickle(randomdata, datadir_local):
     path = os.path.join(datadir_local, "tmp.pkl.gz")
@@ -42,13 +34,6 @@ def test_compression_pickle(randomdata, datadir_local):
     # read compressed with blocks
     d = LocalDataFile(path, path)
     df = io.read_df(d)
-    assert np.isclose(df, randomdata).all().all()
-
-    # write compressed with blocks
-    d = LocalDataFile(path, path)
-    io.write_df(randomdata, d)
-    # read compressed with pandas
-    df = pd.read_pickle(path, compression="gzip")
     assert np.isclose(df, randomdata).all().all()
 
 
@@ -85,12 +70,7 @@ def test_read_write_parquet_unicode(randomdata, datadir_local):
     pytest.importorskip("pandas", minversion="0.22.0")
     randomdata[u"f10"] = randomdata["f9"]
     path = os.path.join(datadir_local, "tmp{}".format(".pq"))
-    if six.PY2:
-        # expect a warning about this in python2
-        with pytest.warns(UserWarning):
-            df = _reload(randomdata, path)
-    else:
-        df = _reload(randomdata, path)
+    df = _reload(randomdata, path)
     assert np.isclose(df, randomdata).all().all()
 
 

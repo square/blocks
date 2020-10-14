@@ -1,19 +1,20 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 
-from six import add_metaclass
+from typing import Union, IO, Sequence, Iterator, List, Any, Generator, ContextManager
+from blocks.datafile import DataFile
+from contextlib import contextmanager
 
 
-@add_metaclass(ABCMeta)
-class FileSystem(object):
-    """ The required interface for any filesystem implementation
+class FileSystem(ABC):
+    """The required interface for any filesystem implementation
 
     See GCSFileSystem for a full implementation. This FileSystem is intended
     to be extendable to support cloud file systems, encryption strategies, etc...
     """
 
     @abstractmethod
-    def ls(self, path):
-        """ List files correspond to path, including glob wildcards
+    def ls(self, path: str) -> Sequence[str]:
+        """List files correspond to path, including glob wildcards
 
         Parameters
         ----------
@@ -23,8 +24,8 @@ class FileSystem(object):
         pass
 
     @abstractmethod
-    def access(self, paths):
-        """ Access multiple paths as file-like objects
+    def access(self, paths: Sequence[str]) -> List[DataFile]:
+        """Access multiple paths as file-like objects
 
         This allows for optimization like parallel downloads
 
@@ -41,8 +42,8 @@ class FileSystem(object):
         pass
 
     @abstractmethod
-    def store(self, bucket, files):
-        """ Store multiple data objects
+    def store(self, bucket: str, files: Sequence[str]) -> ContextManager:
+        """Store multiple data objects
 
         This allows for optimizations when storing several files
 
@@ -58,5 +59,24 @@ class FileSystem(object):
         datafiles : contextmanager
            A contextmanager that will yield datafiles and place them
            on the filesystem when finished
+        """
+        pass
+
+    @abstractmethod
+    @contextmanager
+    def open(self, path, mode="rb"):
+        """Access path as a file-like object
+
+        Parameters
+        ----------
+        path: str
+            The path of the file to access
+        mode: str
+            The file mode for the opened file
+
+        Returns
+        -------
+        file: file
+            A python file opened to the provided path (uses a local temporary copy that is removed)
         """
         pass

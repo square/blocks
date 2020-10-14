@@ -11,7 +11,6 @@ import wrapt
 from blocks.datafile import DataFile, LocalDataFile
 from blocks.filesystem.gcs_filesystem import GCSFileSystem
 from google.cloud import storage
-from six import string_types
 
 
 class GCSNativeDataFile(DataFile):
@@ -60,7 +59,7 @@ def _retry_with_backoff(wrapped, instance, args, kwargs):
 
 
 class GCSNativeFileSystem(GCSFileSystem):
-    """ File system interface that supports GCS and local files
+    """File system interface that supports GCS and local files
 
     This uses the native python cloud storage library for read and write, rather than gsutil.
     The performance is significantly slower when doing any operations over several files (especially
@@ -79,8 +78,7 @@ class GCSNativeFileSystem(GCSFileSystem):
         return self._client
 
     def ls(self, path):
-        """ List all files at the specified path, supports globbing
-        """
+        """List all files at the specified path, supports globbing"""
         logging.info("Globbing file content in {}".format(path))
 
         # use GCSFileSystem's implementation for local paths
@@ -147,7 +145,7 @@ class GCSNativeFileSystem(GCSFileSystem):
             self._transfer(source, dest)
 
     def cp(self, sources, dest, recursive=False):
-        """ Copy the files in sources (recursively) to dest
+        """Copy the files in sources (recursively) to dest
 
         Parameters
         ----------
@@ -158,7 +156,7 @@ class GCSNativeFileSystem(GCSFileSystem):
         recursive : bool, default False
             If true, recursively copy directories
         """
-        if isinstance(sources, string_types):
+        if isinstance(sources, str):
             sources = [sources]
 
         for source in sources:
@@ -181,7 +179,7 @@ class GCSNativeFileSystem(GCSFileSystem):
             self._blob(path).delete()
 
     def rm(self, paths, recursive=False):
-        """ Remove the files at paths
+        """Remove the files at paths
 
         Parameters
         ----------
@@ -190,7 +188,7 @@ class GCSNativeFileSystem(GCSFileSystem):
         recursive : bool, default False
             If true, recursively remove any directories
         """
-        if isinstance(paths, string_types):
+        if isinstance(paths, str):
             paths = [paths]
 
         for path in paths:
@@ -208,7 +206,7 @@ class GCSNativeFileSystem(GCSFileSystem):
 
     @contextmanager
     def open(self, path, mode="rb"):
-        """ Access paths as a file-like object
+        """Access paths as a file-like object
 
         Parameters
         ----------
@@ -226,7 +224,7 @@ class GCSNativeFileSystem(GCSFileSystem):
             yield handle
 
     def access(self, paths):
-        """ Access multiple paths as file-like objects
+        """Access multiple paths as file-like objects
 
         This allows for optimization like parallel downloads. To help track which files
         came from which objects, this returns instances of Datafile
@@ -248,7 +246,7 @@ class GCSNativeFileSystem(GCSFileSystem):
 
     @contextmanager
     def store(self, bucket, files):
-        """ Create file stores that will be written to the filesystem on close
+        """Create file stores that will be written to the filesystem on close
 
         This allows for optimizations when storing several files
 

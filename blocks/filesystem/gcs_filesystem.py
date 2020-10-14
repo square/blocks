@@ -5,15 +5,15 @@ import os
 import shutil
 import subprocess
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, _GeneratorContextManager
+from typing import Sequence, Union, List, IO, Any, Generator
 
 from blocks.datafile import LocalDataFile
 from blocks.filesystem.base import FileSystem
-from six import string_types
 
 
 class GCSFileSystem(FileSystem):
-    """ File system interface that supports both local and GCS files
+    """File system interface that supports both local and GCS files
 
     This implementation uses subprocess and gsutil, which has excellent performance.
     However this can lead to problems in very multi-threaded applications and might not be
@@ -22,7 +22,7 @@ class GCSFileSystem(FileSystem):
 
     GCS = "gs://"
 
-    def __init__(self, parallel=True, quiet=True):
+    def __init__(self, parallel: bool = True, quiet: bool = True):
         flags = []
         if parallel:
             flags.append("-m")
@@ -30,13 +30,12 @@ class GCSFileSystem(FileSystem):
             flags.append("-q")
         self.gcscp = ["gsutil"] + flags + ["cp"]
 
-    def local(self, path):
-        """ Check if the path is available as a local file
-        """
+    def local(self, path: str) -> bool:
+        """Check if the path is available as a local file"""
         return not path.startswith(self.GCS)
 
-    def ls(self, path):
-        """ List files correspond to path, including glob wildcards
+    def ls(self, path: str) -> List[str]:
+        """List files correspond to path, including glob wildcards
 
         Parameters
         ----------
@@ -67,8 +66,8 @@ class GCSFileSystem(FileSystem):
             output = glob.glob(path)
         return sorted(p.rstrip("/") for p in output)
 
-    def rm(self, paths, recursive=False):
-        """ Remove the files at paths
+    def rm(self, paths: Union[str, List[str]], recursive: bool = False):
+        """Remove the files at paths
 
         Parameters
         ----------
@@ -77,7 +76,7 @@ class GCSFileSystem(FileSystem):
         recursive : bool, default False
             If true, recursively remove any directories
         """
-        if isinstance(paths, string_types):
+        if isinstance(paths, str):
             paths = [paths]
 
         if any(not self.local(p) for p in paths):
@@ -97,8 +96,8 @@ class GCSFileSystem(FileSystem):
         for paths in paths_chunks:
             subprocess.check_call(cmd + paths)
 
-    def cp(self, sources, dest, recursive=False):
-        """ Copy the files in sources to dest
+    def cp(self, sources: Union[str, List[str]], dest: str, recursive: bool = False):
+        """Copy the files in sources to dest
 
         Parameters
         ----------
@@ -109,7 +108,7 @@ class GCSFileSystem(FileSystem):
         recursive : bool
             If true, recursively copy any directories
         """
-        if isinstance(sources, string_types):
+        if isinstance(sources, str):
             sources = [sources]
 
         summary = ", ".join(sources)
@@ -132,8 +131,8 @@ class GCSFileSystem(FileSystem):
             subprocess.check_call(cmd + sources + [dest])
 
     @contextmanager
-    def open(self, path, mode="rb"):
-        """ Access path as a file-like object
+    def open(self, path: str, mode: str = "rb"):
+        """Access path as a file-like object
 
         Parameters
         ----------
@@ -162,7 +161,7 @@ class GCSFileSystem(FileSystem):
                 self.cp(nf.name, path)
 
     def access(self, paths):
-        """ Access multiple paths as file-like objects
+        """Access multiple paths as file-like objects
 
         This allows for optimization like parallel downloads
 
@@ -189,7 +188,7 @@ class GCSFileSystem(FileSystem):
 
     @contextmanager
     def store(self, bucket, files):
-        """ Create file stores that will be written to the filesystem on close
+        """Create file stores that will be written to the filesystem on close
 
         This allows for optimizations when storing several files
 
@@ -230,8 +229,7 @@ class GCSFileSystem(FileSystem):
 
 
 def _session_tempdir():
-    """ Create a tempdir that will be cleaned up at session exit
-    """
+    """Create a tempdir that will be cleaned up at session exit"""
     tmpdir = tempfile.mkdtemp()
     # create and use a subdir of specified name to preserve cgroup logic
     atexit.register(lambda: shutil.rmtree(tmpdir))

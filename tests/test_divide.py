@@ -38,4 +38,4 @@ def test_divide_cgroups(datadir, randomdata, fs):
     for subdir in fs.ls(datadir):
         assert len(fs.ls(subdir)) == 10
     df = blocks.assemble(datadir)
-    assert df.equals(randomdata)
+    assert np.isclose(df, randomdata).all().all()
