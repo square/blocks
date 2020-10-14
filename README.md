@@ -26,7 +26,7 @@ To run them locally:
 
 ### Continuous Integrations
 
-CI is handled through travis, and will run non-GCS tests on both 2.7 and 3.6.
+CI is handled through travis, and will run non-GCS tests on 3.6, 3.7, 3.8.
 We may add cloud storage tests to travis soon, but for now tests should also be
 run locally to confirm that functionality works as well.
 
