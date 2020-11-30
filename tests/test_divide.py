@@ -13,6 +13,7 @@ def test_divide_offset(datadir, randomdata, fs):
     blocks.divide(randomdata, datadir, 10, extension=".csv", filesystem=fs)
     blocks.divide(randomdata, datadir, 10, 10, extension=".csv", filesystem=fs)
     assert len(fs.ls(datadir)) == 20
+
     df = blocks.assemble(datadir)
     expected = randomdata.append(randomdata)
     assert np.isclose(df, expected).all().all()

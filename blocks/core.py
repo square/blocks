@@ -20,14 +20,15 @@ from typing import (
     Union,
 )
 
+from blocks.filesystem import FileSystem
+from blocks.utils import with_function_tmpdir, with_session_tmpdir
 from blocks.dfio import read_df, write_df
-from blocks.filesystem import GCSFileSystem, GCSNativeFileSystem, FileSystem
-from blocks.datafile import DataFile
 
 cgroup = str
 rgroup = str
 
 
+@with_function_tmpdir
 def assemble(
     path: str,
     cgroups: Optional[Sequence[cgroup]] = None,
@@ -35,7 +36,8 @@ def assemble(
     read_args: Any = {},
     cgroup_args: Dict[cgroup, Any] = {},
     merge: str = "inner",
-    filesystem: FileSystem = GCSFileSystem(),
+    filesystem: FileSystem = FileSystem(),
+    tmpdir: str = None,
 ) -> pd.DataFrame:
     """Assemble multiple dataframe blocks into a single frame
 
@@ -48,7 +50,7 @@ def assemble(
     Parameters
     ----------
     path : str
-        The glob-able path to all datafiles to assemble into a frame
+        The glob-able path to all data files to assemble into a frame
         e.g. gs://example/*/*, gs://example/*/part.0.pq, gs://example/c[1-2]/*
         See the README for a more detailed explanation
     cgroups : list of str, optional
@@ -71,7 +73,7 @@ def assemble(
         The combined dataframe from all the blocks
 
     """
-    grouped = _collect(path, cgroups, rgroups, filesystem)
+    grouped = _collect(path, cgroups, rgroups, filesystem, tmpdir)
 
     # ----------------------------------------
     # Concatenate all rgroups
@@ -79,28 +81,20 @@ def assemble(
     frames = []
 
     for group in grouped:
-        datafiles = grouped[group]
+        files = grouped[group]
         args = read_args.copy()
         if group in cgroup_args:
             args.update(cgroup_args[group])
-        frames.append(pd.concat(read_df(d, **args) for d in datafiles))
+        frames.append(pd.concat(read_df(f, **args) for f in files))
 
     # ----------------------------------------
     # Merge all cgroups
     # ----------------------------------------
     df = _merge_all(frames, merge=merge)
-
-    # ----------------------------------------
-    # Delete temporary files
-    # ----------------------------------------
-    for file in datafiles:
-        if hasattr(file.handle, "name"):
-            tmp_file_path = file.handle.name
-            if os.path.exists(tmp_file_path):
-                os.remove(file.handle.name)
     return df
 
 
+@with_function_tmpdir
 def iterate(
     path: str,
     axis: int = -1,
@@ -109,7 +103,8 @@ def iterate(
     read_args: Any = {},
     cgroup_args: Dict[cgroup, Any] = {},
     merge: str = "inner",
-    filesystem: FileSystem = GCSFileSystem(),
+    filesystem: FileSystem = FileSystem(),
+    tmpdir: str = None,
 ) -> Union[
     Iterator[Tuple[cgroup, rgroup, pd.DataFrame]], Iterator[Tuple[str, pd.DataFrame]]
 ]:
@@ -122,7 +117,7 @@ def iterate(
     Parameters
     ----------
     path : str
-        The glob-able path to all datafiles to assemble into a frame
+        The glob-able path to all files to assemble into a frame
         e.g. gs://example/*/*, gs://example/*/part.0.pq, gs://example/c[1-2]/*
         See the README for a more detailed explanation
     axis : int, default -1
@@ -152,17 +147,15 @@ def iterate(
         If axis=1, yields (cname, dataframe)
 
     """
-    grouped = _collect(path, cgroups, rgroups, filesystem)
+    grouped = _collect(path, cgroups, rgroups, filesystem, tmpdir)
 
     if axis == -1:
         for cgroup in grouped:
             args = read_args.copy()
             if cgroup in cgroup_args:
                 args.update(cgroup_args[cgroup])
-            for datafile in grouped[cgroup]:
-                yield _cname(datafile.path), _rname(datafile.path), read_df(
-                    datafile, **args
-                )
+            for path in grouped[cgroup]:
+                yield _cname(path), _rname(path), read_df(path, **args)
 
     elif axis == 0:
         # find the shared files among all subfolders
@@ -171,28 +164,27 @@ def iterate(
         for rgroup in sorted(rgroups):
             frames = []
             for cgroup in grouped:
-                datafile = next(
-                    d for d in grouped[cgroup] if os.path.basename(d.path) == rgroup
-                )
+                path = next(d for d in grouped[cgroup] if _rname(d) == rgroup)
 
                 args = read_args.copy()
                 if cgroup in cgroup_args:
                     args.update(cgroup_args[cgroup])
-                frames.append(read_df(datafile, **args))
+                frames.append(read_df(path, **args))
             yield rgroup, _merge_all(frames, merge=merge)
 
     elif axis == 1:
         for cgroup in grouped:
-            datafiles = grouped[cgroup]
+            files = grouped[cgroup]
             args = read_args.copy()
             if cgroup in cgroup_args:
                 args.update(cgroup_args[cgroup])
-            yield cgroup, pd.concat(read_df(d, **args) for d in datafiles)
+            yield cgroup, pd.concat(read_df(path, **args) for path in files)
 
     else:
         raise ValueError("Invalid choice for axis, options are -1, 0, 1")
 
 
+@with_session_tmpdir
 def partitioned(
     path: str,
     cgroups: Sequence[cgroup] = None,
@@ -200,7 +192,8 @@ def partitioned(
     read_args: Any = {},
     cgroup_args: Dict[cgroup, Any] = {},
     merge: str = "inner",
-    filesystem: FileSystem = GCSFileSystem(),
+    filesystem: FileSystem = FileSystem(),
+    tmpdir: str = None,
 ):
     """Return a partitioned dask dataframe, where each partition is a row group
 
@@ -210,7 +203,7 @@ def partitioned(
     Parameters
     ----------
     path : str
-        The glob-able path to all datafiles to assemble into a frame
+        The glob-able path to all files to assemble into a frame
         e.g. gs://example/*/*, gs://example/*/part.0.pq, gs://example/c[1-2]/*
         See the README for a more detailed explanation
     cgroups : list of str, or {str: args} optional
@@ -239,20 +232,18 @@ def partitioned(
     except ImportError:
         raise ImportError("Partitioned requires dask[dataframe] to be installed")
 
-    grouped = _collect(path, cgroups, rgroups, filesystem)
+    grouped = _collect(path, cgroups, rgroups, filesystem, tmpdir)
     blocks = []
 
     @dask.delayed()
     def merged(rgroup):
         frames = []
         for cgroup in grouped:
-            datafile = next(
-                d for d in grouped[cgroup] if os.path.basename(d.path) == rgroup
-            )
+            p = next(p for p in grouped[cgroup] if os.path.basename(p) == rgroup)
             args = read_args.copy()
             if cgroup in cgroup_args:
                 args.update(cgroup_args[cgroup])
-            frames.append(read_df(datafile, **args))
+            frames.append(read_df(p, **args))
         return _merge_all(frames, merge=merge)
 
     for rgroup in _shared_rgroups(grouped):
@@ -260,8 +251,13 @@ def partitioned(
     return dd.from_delayed(blocks)
 
 
+@with_function_tmpdir
 def place(
-    df: pd.DataFrame, path: str, filesystem: FileSystem = GCSFileSystem(), **write_args
+    df: pd.DataFrame,
+    path: str,
+    filesystem: FileSystem = FileSystem(),
+    tmpdir: str = None,
+    **write_args,
 ) -> None:
     """Place a dataframe block onto the filesystem at the specified path
 
@@ -277,11 +273,13 @@ def place(
         A filesystem object that implements the blocks.FileSystem API
 
     """
-    bucket, fname = os.path.dirname(path), os.path.basename(path)
-    with filesystem.store(bucket, [fname]) as datafiles:
-        write_df(df, datafiles[0], **write_args)
+    fname = os.path.basename(path)
+    tmp = os.path.join(tmpdir, fname)
+    write_df(df, tmp, **write_args)
+    filesystem.copy(tmp, path)
 
 
+@with_function_tmpdir
 def divide(
     df: pd.DataFrame,
     path: str,
@@ -290,8 +288,9 @@ def divide(
     cgroup_columns: Optional[Dict[Optional[cgroup], Sequence[str]]] = None,
     extension: str = ".pq",
     convert: bool = False,
-    filesystem: FileSystem = GCSFileSystem(),
+    filesystem: FileSystem = FileSystem(),
     prefix=None,
+    tmpdir: str = None,
     **write_args,
 ) -> None:
     """Split a dataframe into rgroups/cgroups and save to disk
@@ -340,22 +339,35 @@ def divide(
         for col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="ignore")
 
+    files = []
     for cname, columns in cgroup_columns.items():
         cgroup = df[columns]
 
         bucket = os.path.join(path, cname) if cname else path
+        tmp_cgroup = os.path.join(tmpdir, cname) if cname else tmpdir
+
+        if not filesystem.isdir(tmp_cgroup):
+            filesystem.mkdir(tmp_cgroup)
+
         rnames = [
             "part_{:05d}{}".format(i + rgroup_offset, extension)
             for i in range(n_rgroup)
         ]
         if prefix is not None:
             rnames = [prefix + "_" + rn for rn in rnames]
-        with filesystem.store(bucket, rnames) as datafiles:
-            for rgroup, d in zip(np.array_split(cgroup, n_rgroup), datafiles):
-                write_df(rgroup.reset_index(drop=True), d, **write_args)
+
+        for rgroup, rname in zip(np.array_split(cgroup, n_rgroup), rnames):
+            tmp = os.path.join(tmp_cgroup, rname)
+            write_df(rgroup.reset_index(drop=True), tmp, **write_args)
+            files.append((cname, rname) if cname else (rname,))
+
+    filesystem.copy(
+        [os.path.join(tmpdir, *f) for f in files],
+        [os.path.join(path, *f) for f in files],
+    )
 
 
-def pickle(obj: Any, path: str, filesystem: FileSystem = GCSNativeFileSystem()):
+def pickle(obj: Any, path: str, filesystem: FileSystem = FileSystem()):
     """Save a pickle of obj at the specified path
 
     Parameters
@@ -371,7 +383,7 @@ def pickle(obj: Any, path: str, filesystem: FileSystem = GCSNativeFileSystem()):
         _pickle.dump(obj, f)
 
 
-def unpickle(path: str, filesystem: FileSystem = GCSNativeFileSystem()):
+def unpickle(path: str, filesystem: FileSystem = FileSystem()):
     """Load an object from the pickle file at path
 
     Parameters
@@ -392,13 +404,14 @@ def _collect(
     cgroups: Optional[Sequence[cgroup]],
     rgroups: Optional[Sequence[rgroup]],
     filesystem: FileSystem,
-) -> Dict[cgroup, Sequence[DataFile]]:
+    tmpdir: str,
+) -> Dict[cgroup, Sequence[str]]:
     """Collect paths into cgroups and download any gcs files for local access
 
     Parameters
     ----------
     path : str
-        The glob-able path to all datafiles to assemble into a frame
+        The glob-able path to all files to assemble into a frame
         e.g. gs://example/*/*, gs://example/*/part.0.pq, gs://example/c[1-2]/*
         See the README for a more detailed explanation
     cgroups : list of str, optional
@@ -407,6 +420,8 @@ def _collect(
         The list of rgroups (file names) to include from the glob path
     filesystem : blocks.filesystem.FileSystem or similar
         A filesystem object that implements the blocks.FileSystem API
+    tmpdir : str
+        The path of a temporary directory to use for copies of files
 
     Returns
     -------
@@ -423,7 +438,7 @@ def _collect(
     expanded = _expand(paths, filesystem)
     filtered = _filter(expanded, cgroups, rgroups)
     grouped = _cgroups(filtered)
-    accessed = _access(grouped, filesystem)
+    accessed = _access(grouped, filesystem, tmpdir)
 
     # Go in specified cgroup order, or alphabetical if not specified
     if cgroups is None:
@@ -445,8 +460,9 @@ def _expand(paths: Sequence[str], filesystem: FileSystem) -> List[str]:
             expanded.append(path)
         else:
             # Otherwise try to read it like a directory
-            expanded += filesystem.ls(os.path.join(path, "**"))
-    return [p for p in expanded if _has_ext(p)]
+            expanded += filesystem.ls(path + "**")
+    # Some cases might result in duplicates, so we convert to set and back
+    return sorted(set(p for p in expanded if _has_ext(p)))
 
 
 def _filter(
@@ -487,11 +503,17 @@ def _cgroups(paths: Sequence[str]) -> DefaultDict[cgroup, List[str]]:
     return cgroups
 
 
-def _access(cgroups, filesystem: FileSystem) -> Dict[cgroup, List[DataFile]]:
+def _access(cgroups, filesystem: FileSystem, tmpdir: str) -> Dict[cgroup, List[str]]:
     """Access potentially cloud stored files, preserving cgroups"""
     updated = {}
+
     for cgroup, paths in cgroups.items():
-        updated[cgroup] = filesystem.access(paths)
+        if filesystem._get_protocol_path(paths)[0] is None:
+            updated[cgroup] = paths
+        else:
+            tmp_cgroup = os.path.join(tmpdir, cgroup, "")
+            filesystem.copy(paths, tmp_cgroup)
+            updated[cgroup] = filesystem.ls(tmp_cgroup)
     return updated
 
 
@@ -514,5 +536,5 @@ def _merge_all(frames: Sequence[pd.DataFrame], merge="inner") -> pd.DataFrame:
 
 
 def _shared_rgroups(grouped) -> Iterable[rgroup]:
-    rgroups = [[_rname(d.path) for d in group] for group in grouped.values()]
+    rgroups = [[_rname(path) for path in group] for group in grouped.values()]
     return reduce(lambda a, b: set(a) & set(b), rgroups)

@@ -1,3 +1,29 @@
+## [0.9.0b0] - 2020-11-30
+
+### Removed
+
+- GCS(Native)FileSystem no longer provides store/access
+- GCSFileSystem are now backwards compatibility wrappers for FileSystem and will
+  be removed in 1.0.0
+- No more explicit compression support, compression may still be possible
+  through read/write args
+
+### Added
+ 
+- New generic FileSystem backed by fsspec 
+  - rather than using fsspec directly we use this wrapper for better backwards
+    compatibility and more automatic protocol handling
+  - In theory any fsspec implementation is supported but only local and gcsfs
+    are tested so far
+
+### Changed
+- We now use paths (rather than file objects) in pandas io methods for better
+  compatibility
+- All GCS operations are handled through gcsfs, which has much better
+  performance with large numbers of files and has been more robust to connection
+  errors
+- Globbing must now expand to match patterns to literal files, not directories
+
 ## [0.8.0] - 2020-10-14
 
 ### Removed

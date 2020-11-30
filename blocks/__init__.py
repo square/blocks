@@ -14,4 +14,3 @@ from blocks.core import (
     pickle,
     unpickle,
 )  # NOQA
-from blocks.dfio import read_df, write_df  # NOQA
