@@ -7,15 +7,15 @@ with open("README.md") as readme_file:
     readme = readme_file.read()
 
 requirements = [
-    "six==1.14.0",
-    "wrapt",
     "pandas",
-    "google-cloud-storage",
+    "fsspec",
+    "gcsfs",
+    "pyarrow",
+    "fastavro",
+    "wrapt",
 ]
 
 extras_require = {
-    "pq": ["pyarrow"],
-    "avro": ["fastavro"],
     "tests": ["pytest", "pytest-cov", "delegator.py", "flake8"],
     "doc": ["sphinx", "numpydoc", "sphinx-rtd-theme"],
     "format": ["pre-commit"],

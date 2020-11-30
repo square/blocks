@@ -3,7 +3,7 @@ import pytest
 import pandas as pd
 import numpy as np
 
-from blocks.filesystem import GCSFileSystem, GCSNativeFileSystem
+from blocks.filesystem import FileSystem
 from delegator import run
 
 BUCKET = "gs://blocks-example"
@@ -12,21 +12,15 @@ if os.environ.get("CI"):
     inputs = ["local"]
     outputs = ["local"]
     temps = ["local"]
-    filesystems = ["gcs"]
 else:
     inputs = ["local", "gcs", "gcs_extra"]
     outputs = ["local", "gcs"]
     temps = ["local", "gcs"]
-    filesystems = ["gcs", "native"]
 
 
-@pytest.fixture(scope="session", params=filesystems)
+@pytest.fixture
 def fs(request):
-    if request.param == "gcs":
-        return GCSFileSystem()
-
-    if request.param == "native":
-        return GCSNativeFileSystem()
+    return FileSystem()
 
 
 @pytest.fixture(scope="function", params=temps)
@@ -102,8 +96,7 @@ def datadir(request, tmpdir_factory):
 
 
 def _populate(tmpdir):
-    """ Create a directory of blocks with 4 cgroups and 4 rgroups
-    """
+    """Create a directory of blocks with 4 cgroups and 4 rgroups"""
     for c in range(4):
         cgroup = os.path.join(tmpdir, "c{}".format(c))
         if not os.path.exists(cgroup):

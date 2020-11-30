@@ -12,7 +12,7 @@ def test_expand(populated, fs):
     ]
 
     # All of these patterns should expand into the same set of files
-    for ex in ["", "*", "*/*", "**"]:
+    for ex in ["", "*/*", "**"]:
         ex = os.path.join(populated, ex)
         paths = fs.ls(ex)
         expanded = sorted(core._expand(paths, fs))
@@ -27,7 +27,7 @@ def test_expand_pattern(populated, fs):
     ]
 
     # All of these patterns should expand into the same set of files
-    for ex in ["c[01]", "c[01]/*"]:
+    for ex in ["c[01]**", "c[01]/*"]:
         ex = os.path.join(populated, ex)
         paths = fs.ls(ex)
         expanded = sorted(core._expand(paths, fs))
@@ -43,14 +43,15 @@ def test_cgroups():
         assert cgroups[key] == ["base/c{}/part.{}.csv".format(i, j) for j in range(4)]
 
 
-def test_access(populated, fs):
+def test_access(populated, fs, tmpdir):
+    tmpdir = str(tmpdir)
     paths = fs.ls(populated)
     expanded = core._expand(paths, fs)
     cgroups = core._cgroups(expanded)
-    cgroups = core._access(cgroups, fs)
+    cgroups = core._access(cgroups, fs, tmpdir)
     assert len(cgroups) == 4
-    for c, datafiles in cgroups.items():
-        assert len(datafiles) == 4
-        for d in datafiles:
-            with d.handle() as f:
+    for c, paths in cgroups.items():
+        assert len(paths) == 4
+        for path in paths:
+            with open(path, "r") as f:
                 assert f.read()
