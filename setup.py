@@ -7,15 +7,15 @@ with open("README.md") as readme_file:
     readme = readme_file.read()
 
 requirements = [
-    "six==1.14.0",
-    "wrapt",
     "pandas",
-    "google-cloud-storage",
+    "fsspec",
+    "gcsfs",
+    "pyarrow",
+    "fastavro",
+    "wrapt",
 ]
 
 extras_require = {
-    "pq": ["pyarrow"],
-    "avro": ["fastavro"],
     "tests": ["pytest", "pytest-cov", "delegator.py", "flake8"],
     "doc": ["sphinx", "numpydoc", "sphinx-rtd-theme"],
     "format": ["pre-commit"],
@@ -24,7 +24,7 @@ extras_require["dev"] = set(sum(extras_require.values(), []))
 
 setup(
     name="sq-blocks",
-    version="0.8.0",
+    version="0.9.0b0",
     description=(
         "Blocks provides a simple interface to read, organize, and manipulate structured data"
         " in files on local and cloud storage"

@@ -1,8 +1,6 @@
-import gzip
 import os
 import warnings
 import pandas as pd
-from io import TextIOWrapper
 
 try:
     import fastavro as avro
@@ -12,16 +10,14 @@ except ImportError:
     avro_imported = False
 
 
-def read_df(datafile, **read_args):
-    """Read a dataframe from file based on the file extension
-
-    The following formats are supported:
-    parquet, avro, csv, pickle
+def read_df(path, **read_args):
+    """Read a dataframe path based on the file extension
+    parquet, avro, csv, pickle, json
 
     Parameters
     ----------
-    datafile : DataFile
-        DataFile instance with the path and handle
+    path: str
+        The path to the file holding data
     read_args : optional
         All keyword args are passed to the read function
 
@@ -33,34 +29,23 @@ def read_df(datafile, **read_args):
     -----
     The read functions are taken from pandas, e.g. pd.read_csv
     Check the pandas doc for more information on the supported arguments
-
     """
-    filetype, compression = _get_extension(datafile.path)
+    filetype = _get_extension(path)
     reader = _readers[filetype]
-    if (
-        reader in (pd.read_csv, pd.read_pickle, pd.read_json)
-        and compression is not None
-    ):
-        read_args["compression"] = compression
-    elif reader in (pd.read_csv, pd.read_pickle, pd.read_json):
-        read_args[
-            "compression"
-        ] = None  # default "infer" incompatible with handles as of 0.24
     if reader == pd.read_json:
         # Default json file is newline delimited json records, but can be overwritten
         defaults = {"lines": True, "orient": "records"}
         defaults.update(read_args)
         read_args = defaults
 
-    with datafile.handle("rb") as f:
-        return reader(f, **read_args)
+    return reader(path, **read_args)
 
 
-def write_df(df, datafile, **write_args):
+def write_df(df, path, **write_args):
     """Write a dataframe to file based on the file extension
 
     The following formats are supported:
-    parquet, avro, csv, pickle
+    parquet, avro, csv, pickle, json
 
     Parameters
     ----------
@@ -75,71 +60,49 @@ def write_df(df, datafile, **write_args):
     -----
     The write functions are taken from pandas, e.g. pd.to_csv
     Check the pandas doc for more information on the supported arguments
-
     """
-    extension, compression = _get_extension(datafile.path)
+    extension = _get_extension(path)
     write_name = _writers[extension]
-    # infer compression from filepath or from explicit arg
-    compression = compression or write_args.get("compression")
-    with datafile.handle("wb") as buf:
-        # Some customizations for different file types
-        if write_name == "to_avro":
-            return _write_avro(df, buf, **write_args)
 
-        if (
-            write_name == "to_parquet"
-            and not pd.Series(df.columns).map(type).eq(str).all()
-        ):
-            warnings.warn(
-                "Dataframe contains non-string column names, which cannot be saved in parquet.\n"
-                "Blocks will attempt to convert them to strings."
-            )
-            df.columns = df.columns.astype("str")
+    # Some customizations for different file types
+    if write_name == "to_avro":
+        return _write_avro(df, path, **write_args)
 
-        if write_name == "to_json":
-            defaults = {"lines": True, "orient": "records"}
-            defaults.update(write_args)
-            write_args = defaults
+    if write_name == "to_parquet" and not pd.Series(df.columns).map(type).eq(str).all():
+        warnings.warn(
+            "Dataframe contains non-string column names, which cannot be saved in parquet.\n"
+            "Blocks will attempt to convert them to strings."
+        )
+        df.columns = df.columns.astype("str")
 
-        if write_name == "to_csv":
-            # make index=False the default for similar behaviour to other formats
-            write_args["index"] = write_args.get("index", False)
+    if write_name == "to_json":
+        defaults = {"lines": True, "orient": "records"}
+        defaults.update(write_args)
+        write_args = defaults
 
-        # For csv and pickle we have to manually compress
-        manual_compress = write_name in ("to_csv", "to_pickle", "to_json")
-        if manual_compress:
-            write_args[
-                "compression"
-            ] = None  # default "infer" incompatible with handles as of 0.24
+    if write_name == "to_csv":
+        # make index=False the default for similar behaviour to other formats
+        write_args["index"] = write_args.get("index", False)
 
-        if manual_compress and compression is not None:
-            raise ValueError(
-                "Compression {} is not supported for CSV/Pickle/JSON".format(
-                    compression
-                )
-            )
-
-        if write_name in ("to_csv", "to_json"):
-            buf = TextIOWrapper(buf, write_through=True)
-
-        write_fn = getattr(df, write_name)
-        write_fn(buf, **write_args)
+    write_fn = getattr(df, write_name)
+    write_fn(path, **write_args)
 
 
-def _read_avro(handle, **read_args):
+def _read_avro(path, **read_args):
     if not avro_imported:
         raise ImportError(
             "Avro support requires fastavro.\n"
             "Install blocks with the [avro] option or `pip install fastavro`"
         )
     records = []
-    avro_reader = avro.reader(handle)
-    for record in avro_reader:
-        records.append(record)
+    with open(path, "rb") as f:
+        avro_reader = avro.reader(f)
+        for record in avro_reader:
+            records.append(record)
     return pd.DataFrame.from_dict(records)
 
 
-def _write_avro(df, handle, **write_args):
+def _write_avro(df, path, **write_args):
     if not avro_imported:
         raise ImportError(
             "Avro support requires fastavro.\n"
@@ -159,17 +122,13 @@ def _write_avro(df, handle, **write_args):
     if schema is None:
         schema = avro.schema.load_schema(schema_path)
     records = df.to_dict("records")
-    avro.writer(handle, schema, records)
+    with open(path, "wb") as f:
+        avro.writer(f, schema, records)
 
 
 def _get_extension(path):
     name, ext = os.path.splitext(path)
-    # Support compression extensions, eg part.csv.gz
-    comp = None
-    if ext in _compressions and "." in name:
-        comp = ext
-        name, ext = os.path.splitext(name)
-    return ext, _compressions.get(comp)
+    return ext
 
 
 _readers = {
@@ -190,5 +149,3 @@ _writers = {
     ".avro": "to_avro",
     ".json": "to_json",
 }
-
-_compressions = {".gz": "gzip", ".bz2": "bz2", ".zip": "zip", ".xz": "xz"}
