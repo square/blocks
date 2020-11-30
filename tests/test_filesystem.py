@@ -58,20 +58,6 @@ def test_open_write(temp, fs):
         assert f.read() == content
 
 
-def test_store_access(temp, fs):
-    paths = []
-    with fs.store(temp, ["ex1.txt", "ex2.txt"]) as datafiles:
-        for d in datafiles:
-            paths.append(d.path)
-            with d.handle("wb") as f:
-                f.write(TEST_STRING)
-
-    datafiles = fs.access(paths)
-    for d in datafiles:
-        with d.handle("rb") as f:
-            assert f.read() == TEST_STRING
-
-
 def test_copy_recursive_to_local(populated, tmpdir, fs):
     dest = str(tmpdir)
     fs.cp(populated, dest, recursive=True)

@@ -62,7 +62,7 @@ author = u"Bradley Axen"
 # built documents.
 #
 # The short X.Y version.
-version = u"0.8.0"
+version = u"0.9.0b0"
 # The full version, including alpha/beta/rc tags.
 release = u"0.8.0"
 

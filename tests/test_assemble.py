@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import os
 from blocks import core
 
 
@@ -7,6 +8,14 @@ def test_assemble(populated, fs):
     df = core.assemble(populated, filesystem=fs)
     assert df.shape == (40, 41)
     expected = ["f{}_{}".format(i, j) for i in range(4) for j in range(10)]
+    expected.append("key")
+    assert set(df.columns) == set(expected)
+
+
+def test_assemble_flat(populated, fs):
+    df = core.assemble(os.path.join(populated, "c0"), filesystem=fs)
+    assert df.shape == (40, 11)
+    expected = ["f{}_{}".format(i, j) for i in range(1) for j in range(10)]
     expected.append("key")
     assert set(df.columns) == set(expected)
 
