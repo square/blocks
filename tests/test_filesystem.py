@@ -68,10 +68,13 @@ def test_copy_recursive_to_local(populated, tmpdir, fs):
 
 def test_copy_recursive_matched(populated, fs):
     dest = populated.replace("data", "copy")
-    fs.cp(populated, dest, recursive=True)
-    source = [p.replace(populated, "") for p in fs.ls(populated + "/**")]
-    copy = fs.ls(dest + "/**")
-    assert (s in c for s, c in zip(source, copy))
+    try:
+        fs.cp(populated, dest, recursive=True)
+        source = [p.replace(populated, "") for p in fs.ls(populated + "/**")]
+        copy = fs.ls(dest + "/**")
+        assert (s in c for s, c in zip(source, copy))
+    finally:
+        fs.rm(dest, recursive=True)
 
 
 def test_rm(populated, fs):

@@ -94,18 +94,23 @@ class FileSystem:
             # Temporary workaround for a bug in gcsfs
             if protocol_source == "gs" and recursive:
                 sources = fs.expand_path(sources, recursive=True)
-                sources = [s for s in sources if not fs.isdir(s)]
-                return fs.copy(sources, dest, recursive=False)
+                sources = ["gs://" + s for s in sources if not fs.isdir(s)]
+                return self.copy(sources, "gs://" + dest, recursive=False)
 
             fs.copy(sources, dest, recursive=recursive)
 
-        if protocol_source is None:
+        elif protocol_source is None:
             fs = self._get_filesystem(protocol_dest)
             fs.put(sources, dest, recursive=recursive)
 
-        if protocol_dest is None:
+        elif protocol_dest is None:
             fs = self._get_filesystem(protocol_source)
             fs.get(sources, dest, recursive=recursive)
+
+        elif protocol_dest is not None and protocol_source is not None:
+            raise NotImplementedError(
+                "Cannot do direct copy between two different cloud filesystems"
+            )
 
         if protocol_dest == "gs":
             # Make sure we invalidate the gcsfs cache since we have added new files
@@ -114,11 +119,6 @@ class FileSystem:
             else:
                 for d in dest:
                     fs.invalidate_cache(d)
-
-        if protocol_dest is not None and protocol_source is not None:
-            raise NotImplementedError(
-                "Cannot do direct copy between two cloud filesystems"
-            )
 
     def remove(self, paths: Union[str, List[str]], recursive: bool = False):
         """Remove the files at paths
