@@ -1,4 +1,3 @@
-numpydoc
 # Frozen versions of fsspec and gcsfs to avoid conflict in read the docs
 fsspec==2021.05.0
 gcsfs==2021.05.0
