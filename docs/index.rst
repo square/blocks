@@ -13,24 +13,22 @@ Install
 
     pip install sq-blocks
 
-To enable GCS support make sure to also install the `Google Cloud SDK`_
-
 Features
 --------
 
 .. code-block:: python
 
     import blocks
-
+  
     # Load one or more files with the same interface
     df = blocks.assemble('data.csv')
-    train = blocks.assemble('data/*[01].csv')
-    test = blocks.assemble('data/*[2-9].csv')
-
+    train = blocks.assemble('data/*[0-7].csv')
+    test = blocks.assemble('data/*[89].csv')
+  
     # With direct support for files on GCS
     df = blocks.assemble('gs://mybucket/data.csv')
     df = blocks.assemble('gs://mybucket/data/*.csv')
-
+                
 The interface emulates the tools you're used to from the command line, with full support for globbing and pattern
 matching. And blocks can handle more complicated structures as your data grows in complexity:
 
@@ -39,7 +37,7 @@ Layout                   Recipe
 =======================  =====================================================================
 .. image:: both.png      .. code-block:: python
 
-                             blocks.assemble('data/**')``
+                             blocks.assemble('data/**')
 
 .. image:: column.png    .. code-block:: python
 
@@ -57,15 +55,11 @@ Layout                   Recipe
 
 
 
-Full Contents
--------------
-
 .. toctree::
+   :hidden:
 
    quickstart
    examples
    core
    filesystem
 
-
-.. _Google Cloud SDK: https://cloud.google.com/sdk/docs/

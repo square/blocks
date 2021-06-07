@@ -17,7 +17,7 @@ requirements = [
 
 extras_require = {
     "tests": ["pytest", "pytest-cov", "delegator.py", "flake8"],
-    "doc": ["sphinx", "numpydoc", "sphinx-rtd-theme"],
+    "doc": ["sphinx", "numpydoc", "furo", "sphinx-copybutton"],
     "format": ["pre-commit"],
 }
 extras_require["dev"] = set(sum(extras_require.values(), []))
