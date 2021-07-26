@@ -6,9 +6,11 @@ from setuptools import setup, find_packages
 with open("README.md") as readme_file:
     readme = readme_file.read()
 
+# pin fsspec until
+# https://github.com/intake/filesystem_spec/commit/ee22435bc57bd9158103415c5fc58c3cbdddebf2 released
 requirements = [
     "pandas",
-    "fsspec",
+    "fsspec==2021.6.0",
     "gcsfs",
     "pyarrow",
     "fastavro",
