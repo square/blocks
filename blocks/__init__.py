@@ -2,7 +2,7 @@
 
 __author__ = """Bradley Axen"""
 __email__ = "baxen@squareup.com"
-__version__ = "0.9.1"
+__version__ = "0.9.2"
 
 
 from blocks.core import (
