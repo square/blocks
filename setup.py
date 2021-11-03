@@ -6,12 +6,10 @@ from setuptools import setup, find_packages
 with open("README.md") as readme_file:
     readme = readme_file.read()
 
-# pin fsspec until
-# https://github.com/intake/filesystem_spec/commit/ee22435bc57bd9158103415c5fc58c3cbdddebf2 released
 requirements = [
     "pandas",
-    "fsspec==2021.6.0",
-    "gcsfs",
+    "fsspec>=2021.7.0",
+    "gcsfs>=2021.7.0",
     "pyarrow",
     "fastavro",
     "wrapt",
@@ -26,7 +24,7 @@ extras_require["dev"] = set(sum(extras_require.values(), []))
 
 setup(
     name="sq-blocks",
-    version="0.9.2",
+    version="0.9.3",
     description=(
         "Blocks provides a simple interface to read, organize, and manipulate structured data"
         " in files on local and cloud storage"
