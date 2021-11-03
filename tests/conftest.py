@@ -42,7 +42,7 @@ def populated_local(request, tmpdir_factory):
     return tmpdir
 
 
-# This is the same directory structure as above but paramatrized on different file systems
+# This is the same directory structure as above but parametrized on different file systems
 @pytest.fixture(scope="session", params=inputs)
 def populated(request, populated_local):
     if request.param == "local":
