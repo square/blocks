@@ -12,6 +12,11 @@ def test_assemble(populated, fs):
     assert set(df.columns) == set(expected)
 
 
+def test_assemble_single(populated, fs):
+    df = core.assemble(os.path.join(populated, "c0", "part.0.csv"))
+    assert df.shape == (10, 11)
+
+
 def test_assemble_flat(populated, fs):
     df = core.assemble(os.path.join(populated, "c0"), filesystem=fs)
     assert df.shape == (40, 11)
