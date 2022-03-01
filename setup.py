@@ -10,6 +10,7 @@ requirements = [
     "pandas",
     "fsspec>=2021.7.0",
     "gcsfs>=2021.7.0",
+    "s3fs",
     "pyarrow",
     "fastavro",
     "wrapt",
