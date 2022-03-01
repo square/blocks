@@ -25,7 +25,7 @@ extras_require["dev"] = set(sum(extras_require.values(), []))
 
 setup(
     name="sq-blocks",
-    version="0.9.3",
+    version="0.9.4",
     description=(
         "Blocks provides a simple interface to read, organize, and manipulate structured data"
         " in files on local and cloud storage"
